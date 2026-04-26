@@ -1,5 +1,20 @@
-./agents/
+# 隐藏文件
+.*
+!.gitignore
+!.gitattributes
+
+# Git 相关
+.git/
+.githooks/
+.gitkeep
+
+# 常见隐藏目录
 .DS_Store
 .specstory/
 .vscode/
+.qoder/
 skills/newegg-pc-builder/.specstory/
+
+# 其他
+./agents/
+
