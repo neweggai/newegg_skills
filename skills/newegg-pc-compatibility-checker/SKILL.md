@@ -1,13 +1,6 @@
 ---
 name: newegg-pc-compatibility-checker
-description: >-
-  Verify whether a set of specific PC hardware items are compatible with each other using Newegg's
-  real PC Builder compatibility engine. Use when the user has parts in mind (model names or Newegg
-  item numbers) and asks whether they work together — "do these work together", "will this GPU
-  work with my PSU", "can this RAM go on this motherboard", "is this build compatible",
-  "这些硬件兼容吗", "这个显卡能配我的电源吗", "我想升级显卡，原来的电源够不够". Trigger when the user names two
-  or more specific hardware items and wants a verdict. Do NOT use for from-scratch build
-  recommendations where the user has not picked specific parts.
+description: Verify whether a set of specific PC hardware items are compatible with each other using Newegg's real PC Builder compatibility engine. Use when the user has parts in mind (model names or Newegg item numbers) and asks whether they work together — "do these work together", "will this GPU work with my PSU", "can this RAM go on this motherboard", "is this build compatible", "这些硬件兼容吗", "这个显卡能配我的电源吗", "我想升级显卡，原来的电源够不够". Trigger when the user names two or more specific hardware items and wants a verdict. Do NOT use for from-scratch build recommendations where the user has not picked specific parts.
 allowed-tools: bash
 ---
 
@@ -22,25 +15,25 @@ scope.
 
 ## Agent Execution Rules
 
-- **Reply in the user's language.** Detect the language of the user's question and produce the
+* **Reply in the user's language.** Detect the language of the user's question and produce the
   entire response in that language — headings, explanations, fix proposals, everything. Chinese
   question → Chinese reply. English question → English reply. Japanese question → Japanese reply.
   Do not mix unless the user mixes first. The only exception is that raw data (item numbers,
   model names, the original English `reasonTraces` string in parentheses) stays as-is.
-- **Do not** guess compatibility from your own hardware knowledge. That is the exact failure mode
+* **Do not** guess compatibility from your own hardware knowledge. That is the exact failure mode
   this skill exists to prevent.
-- **Do not** ask for clarification when the user already gave you the parts. Infer item numbers /
+* **Do not** ask for clarification when the user already gave you the parts. Infer item numbers /
   names from their message and call immediately.
-- Use the **`bash`** tool to run the curl commands below.
-- On curl failure or invalid JSON, report the error directly. Do not fall back to your own
+* Use the **`bash`** tool to run the curl commands below.
+* On curl failure or invalid JSON, report the error directly. Do not fall back to your own
   knowledge to produce a verdict.
 
 ## Endpoints
 
-| Purpose                | Endpoint                                                              |
-|------------------------|----------------------------------------------------------------------|
-| Compatibility check    | `https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder`                |
-| Product search         | `https://apis.newegg.com/ex-mcp/endpoint/product-search`              |
+| Purpose | Endpoint |
+| --- | --- |
+| Compatibility check | `https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder` |
+| Product search | `https://apis.newegg.com/ex-mcp/endpoint/product-search` |
 
 product-search is only needed when the user gives you a model name without an item number —
 it resolves `name → ItemNumber`. When the user already gave item numbers, go straight to
@@ -52,12 +45,12 @@ pc-builder.
 
 Look at what the user provided:
 
-- **They gave item numbers** (e.g. `19-113-938`) → use them directly and **skip straight to Step
+* **They gave item numbers** (e.g. `19-113-938`) → use them directly and **skip straight to Step
   2**. No lookup needed. Always use the **short hyphenated format** (`19-113-938`), never the
   long URL form (`N82E16819113938`).
-- **They gave model names** (e.g. "Ryzen 9 9950X3D" + "ASUS B760M-AYW WIFI D4") → call
+* **They gave model names** (e.g. "Ryzen 9 9950X3D" + "ASUS B760M-AYW WIFI D4") → call
   **product-search** once per part (in parallel) to resolve each name into an `ItemNumber`.
-- **Mixed** → only search for the parts that do not already have item numbers.
+* **Mixed** → only search for the parts that do not already have item numbers.
 
 product-search returns `ItemNumber` directly in the short-hyphenated format — that is everything
 you need to hand to pc-builder. Do not call any other endpoint for the name → item-number step.
@@ -87,7 +80,7 @@ Call `comboCompatibleAll` with a **space-separated list** of short-hyphenated it
 single `itemNumber` string. Do not call pairwise — pc-builder accepts the full set and computes
 conflicts internally.
 
-```bash
+```
 curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder" \
   -H "Content-Type: application/json" \
   -d '{
@@ -104,13 +97,14 @@ curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder" \
   }'
 ```
 
-- `businessId` is always **`2`** (fixed).
-- `itemNumber` is a **space-separated** string of short-hyphenated item numbers — e.g.
+* `businessId` is always **`2`** (fixed).
+* `itemNumber` is a **space-separated** string of short-hyphenated item numbers — e.g.
   `"19-113-938 13-144-674"`.
 
 > If the call returns a tool-not-found error, first run `tools/list` to discover the correct tool
 > name:
-> ```bash
+>
+> ```
 > curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder" \
 >   -H "Content-Type: application/json" \
 >   -d '{"jsonrpc":"2.0","id":0,"method":"tools/list"}'
@@ -126,14 +120,14 @@ response → result.content[0].text → (parse as JSON) → verdict
 
 Fields on the verdict object:
 
-| Field                              | Description                                                   |
-|-----------------------------------|---------------------------------------------------------------|
-| `isCompatible`                    | `true` → all parts compatible. `false` → at least one conflict |
-| `incompatibleItems[]`             | Present only when `isCompatible: false`. One entry per conflicting pair |
-| `incompatibleItems[].itemNumber`  | One side of the conflict                                      |
-| `incompatibleItems[].relatedItemNumber` | The other side of the conflict                          |
-| `incompatibleItems[].reason`      | Single summary line of the conflict                           |
-| `incompatibleItems[].uncompatibleInfo` | Usually duplicates `reason`                              |
+| Field | Description |
+| --- | --- |
+| `isCompatible` | `true` → all parts compatible. `false` → at least one conflict |
+| `incompatibleItems[]` | Present only when `isCompatible: false`. One entry per conflicting pair |
+| `incompatibleItems[].itemNumber` | One side of the conflict |
+| `incompatibleItems[].relatedItemNumber` | The other side of the conflict |
+| `incompatibleItems[].reason` | Single summary line of the conflict |
+| `incompatibleItems[].uncompatibleInfo` | Usually duplicates `reason` |
 | `incompatibleItems[].reasonTraces[]` | **Array of every specific rule that failed.** Always read this, not just `reason` |
 
 ### Step 3 — Report the verdict honestly
@@ -161,9 +155,9 @@ entry:
 
 1. Refer to the two conflicting items using **whatever the user gave you in their original
    question**:
-   - User gave model names → use those names (e.g. "Ryzen 9 9950X3D ↔ ASUS B760M-AYW").
-   - User gave bare item numbers → use the item numbers (e.g. "19-113-938 ↔ 13-144-674").
-   - User gave a mix → use names where they gave names, item numbers where they gave item
+   * User gave model names → use those names (e.g. "Ryzen 9 9950X3D ↔ ASUS B760M-AYW").
+   * User gave bare item numbers → use the item numbers (e.g. "19-113-938 ↔ 13-144-674").
+   * User gave a mix → use names where they gave names, item numbers where they gave item
      numbers. Do not do a lookup just to pretty-print.
 2. List **every** entry in `reasonTraces` — not just `reason`. Each trace is a separate failed
    rule and the user deserves to see all of them.
@@ -177,10 +171,10 @@ entry:
 
 After explaining the conflict, propose a concrete fix:
 
-- Socket / chipset / DDR-generation mismatch → swap the smaller/cheaper side (usually the
+* Socket / chipset / DDR-generation mismatch → swap the smaller/cheaper side (usually the
   motherboard or RAM, not the CPU).
-- PSU undersized vs GPU → suggest a specific replacement PSU.
-- Physical fit (case clearance, cooler height) → swap a part of the same category.
+* PSU undersized vs GPU → suggest a specific replacement PSU.
+* Physical fit (case clearance, cooler height) → swap a part of the same category.
 
 Use **product-search** to find the replacement part, then **call pc-builder again** with the
 updated item list to verify. Do not declare the fix valid from your own reasoning — re-run
@@ -229,52 +223,52 @@ non-English-speaking user.
 
 ## Hard rules
 
-- **Item numbers go to pc-builder in short hyphenated format** (`19-113-938`), not the long form
+* **Item numbers go to pc-builder in short hyphenated format** (`19-113-938`), not the long form
   (`N82E16819113938`).
-- **Never claim compatibility without an `isCompatible: true`** from pc-builder. No verdicts
+* **Never claim compatibility without an `isCompatible: true`** from pc-builder. No verdicts
   derived from your own knowledge. Ever.
-- **Never claim incompatibility without an `isCompatible: false`** from pc-builder. Even for
+* **Never claim incompatibility without an `isCompatible: false`** from pc-builder. Even for
   "obvious" cases (AMD CPU + Intel motherboard), still call pc-builder so the user sees the
   authoritative verdict and the specific reasons.
-- **Read `reasonTraces`, not just `reason`** — the array has more detail than the summary string.
-- **Reuse whatever the user gave you** when reporting conflicts — names if they gave names, item
+* **Read `reasonTraces`, not just `reason`** — the array has more detail than the summary string.
+* **Reuse whatever the user gave you** when reporting conflicts — names if they gave names, item
   numbers if they gave item numbers. Do not run extra lookups to pretty-print.
-- **Re-verify after any fix** by calling pc-builder again with the updated set.
+* **Re-verify after any fix** by calling pc-builder again with the updated set.
 
 ## Out of scope
 
-- Building a new PC from scratch when the user has not picked specific parts. Tell them this skill
+* Building a new PC from scratch when the user has not picked specific parts. Tell them this skill
   is for verifying parts they already have in mind, and answer their build-recommendation question
   normally without this skill.
-- Recommending parts based on price / performance opinions when the user only asked about
+* Recommending parts based on price / performance opinions when the user only asked about
   compatibility. Stay focused on the compatibility question.
-- Inventing compatibility rules pc-builder did not return. If the MCP says valid, do not add fake
+* Inventing compatibility rules pc-builder did not return. If the MCP says valid, do not add fake
   caveats; if invalid, do not expand on reasons it did not give.
 
 ## Common pitfalls
 
-- **Doing extra lookups to translate item numbers into names** when the user already gave you
+* **Doing extra lookups to translate item numbers into names** when the user already gave you
   item numbers and will recognize them. Wasteful and slow — just report what the user gave you.
-- **Translating only `reason` and ignoring `reasonTraces`** — the user loses information about
+* **Translating only `reason` and ignoring `reasonTraces`** — the user loses information about
   every failed rule.
-- **Using the long-form item number** (`N82E16819113938`). pc-builder expects the short form.
-- **Skipping pc-builder for "obvious" cases** like AMD CPU + Intel motherboard. The whole point of
+* **Using the long-form item number** (`N82E16819113938`). pc-builder expects the short form.
+* **Skipping pc-builder for "obvious" cases** like AMD CPU + Intel motherboard. The whole point of
   the skill is that the verdict comes from the MCP, not from you.
-- **Suggesting a fix without re-verifying** — every proposed swap must go through pc-builder again
+* **Suggesting a fix without re-verifying** — every proposed swap must go through pc-builder again
   before being presented as a solution.
-- **Silently substituting a part when product-search returns 0 results.** If Newegg does not have
+* **Silently substituting a part when product-search returns 0 results.** If Newegg does not have
   the exact part the user asked about, you must tell the user and ask — not quietly proceed with
   a similar part. The final verdict must always be about the parts the user actually asked about.
-- **Omitting the PSU wattage disclaimer** when reporting an `isCompatible: true` build that
+* **Omitting the PSU wattage disclaimer** when reporting an `isCompatible: true` build that
   includes a PSU. pc-builder does not check that the PSU is big enough for the GPU; tell the user
   that explicitly instead of letting them assume the green check covers it.
 
 ## Edge cases
 
-- **HTTP error or curl failure**: Report status code and body. Do not retry silently and do not
+* **HTTP error or curl failure**: Report status code and body. Do not retry silently and do not
   fall back to your own compatibility knowledge.
-- **`result.error` in response**: Display `error.message` to the user.
-- **`incompatibleItems` empty but `isCompatible: false`**: Treat as an upstream bug — tell the
+* **`result.error` in response**: Display `error.message` to the user.
+* **`incompatibleItems` empty but `isCompatible: false`**: Treat as an upstream bug — tell the
   user the service returned an inconsistent response and ask them to retry.
-- **`incompatibleItems` pairs the same `itemNumber` with multiple `relatedItemNumber`s**: Report
+* **`incompatibleItems` pairs the same `itemNumber` with multiple `relatedItemNumber`s**: Report
   each pair separately; do not collapse them.
