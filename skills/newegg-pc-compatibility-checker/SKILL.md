@@ -39,7 +39,7 @@ scope.
 
 | Purpose                | Endpoint                                                              |
 |------------------------|----------------------------------------------------------------------|
-| Compatibility check    | `https://apis-e111.newegg.org/mcp/endpoint/pc-builder`                |
+| Compatibility check    | `https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder`                |
 | Product search         | `https://apis.newegg.com/ex-mcp/endpoint/product-search`              |
 
 product-search is only needed when the user gives you a model name without an item number —
@@ -88,7 +88,7 @@ single `itemNumber` string. Do not call pairwise — pc-builder accepts the full
 conflicts internally.
 
 ```bash
-curl -sS -X POST "https://apis-e111.newegg.org/mcp/endpoint/pc-builder" \
+curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder" \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -111,7 +111,7 @@ curl -sS -X POST "https://apis-e111.newegg.org/mcp/endpoint/pc-builder" \
 > If the call returns a tool-not-found error, first run `tools/list` to discover the correct tool
 > name:
 > ```bash
-> curl -sS -X POST "https://apis-e111.newegg.org/mcp/endpoint/pc-builder" \
+> curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder" \
 >   -H "Content-Type: application/json" \
 >   -d '{"jsonrpc":"2.0","id":0,"method":"tools/list"}'
 > ```
