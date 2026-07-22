@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "newegg-external-semantic-search": {
+      "type": "streamable-http",
+      "url": "https://apis.newegg.com/ex-mcp/endpoint/external-semantic-search"
+    },
+    "newegg-product-search": {
+      "type": "http",
+      "url": "https://apis.newegg.com/ex-mcp/endpoint/product-search"
+    }
+  }
+}

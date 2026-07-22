@@ -2,6 +2,7 @@
 .*
 !.gitignore
 !.gitattributes
+!.mcp.json
 
 # Git 相关
 .git/
