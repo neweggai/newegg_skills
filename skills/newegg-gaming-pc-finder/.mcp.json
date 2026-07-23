@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "newegg-gaming-pc-finder": {
+      "type": "streamable-http",
+      "url": "https://apis.newegg.com/ex-mcp/endpoint/gaming-pc-finder"
+    }
+  }
+}
