@@ -84,26 +84,78 @@ OPTICAL_WATTS = {
 
 PSU_TIERS = [550, 650, 750, 850, 1000, 1200, 1600]
 
+# Wattage tables come from the www-tool MCP endpoint (stateless JSON-RPC, no auth).
+MCP_ENDPOINT = "https://apis.newegg.com/ex-mcp/endpoint/website-www-tool"
+CPU_WATTAGE_TOOL = "getapi_assistance_getJson_WWW_CPUWattage_USA"
+GPU_WATTAGE_TOOL = "getapi_assistance_getJson_WWW_GPUWattage_USA"
+COUNTRY_CODE = "USA"
+COMPANY_CODE = 1003
+# Identifies the calling skill to the endpoint; sent on every request.
+SKILL_NAME = "newegg-psu-calculator"
+
 
 # ──────────────────────────────────────────────
 # API helpers
 # ──────────────────────────────────────────────
 
-def fetch_api(url):
-    """Fetch and parse Newegg wattage API. Returns list of dicts."""
+def fetch_api(tool):
+    """Fetch a wattage table through the www-tool MCP endpoint. Returns list of dicts.
+
+    Returns [] on any failure — the caller turns that into a user-visible warning
+    rather than a wrong wattage total.
+    """
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": tool,
+            "arguments": {"CountryCode": COUNTRY_CODE, "CompanyCode": COMPANY_CODE},
+        },
+    }
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        req = urllib.request.Request(
+            MCP_ENDPOINT,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                "x-skill": SKILL_NAME,
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
             raw = resp.read().decode("utf-8")
-        # Both APIs return double-encoded JSON: outer string -> dict -> Data string -> list
-        outer = json.loads(raw)
-        if isinstance(outer, str):
-            outer = json.loads(outer)
-        data = outer.get("Data", "[]")
-        if isinstance(data, str):
-            data = json.loads(data)
-        return data
-    except Exception as e:
+
+        # A streamable-http server may answer as SSE; take the last data: line.
+        if raw.lstrip().startswith(("event:", "data:")):
+            lines = [ln[5:].strip() for ln in raw.splitlines() if ln.startswith("data:")]
+            if not lines:
+                return []
+            raw = lines[-1]
+
+        envelope = json.loads(raw)
+        if envelope.get("error"):
+            return []
+        result = envelope.get("result") or {}
+        if result.get("isError"):
+            return []
+        content = result.get("content") or []
+        if not content:
+            return []
+
+        # The payload is multiply encoded: content[0].text is a JSON string that
+        # decodes to another JSON string, then to {"Data": "<json list>"}.
+        value = content[0]["text"]
+        for _ in range(5):
+            if isinstance(value, str):
+                value = json.loads(value)
+            elif isinstance(value, dict) and "Data" in value:
+                value = value["Data"]
+            else:
+                break
+        return value if isinstance(value, list) else []
+    except Exception:
         return []
 
 
@@ -261,7 +313,7 @@ def main():
 
     # ── CPU ──
     if spec.get("cpu"):
-        cpu_list = fetch_api("https://www.newegg.com/api/common/CPUWattage?countryCode=USA")
+        cpu_list = fetch_api(CPU_WATTAGE_TOOL)
         if not cpu_list:
             result["warnings"].append("Could not fetch CPU data from API; CPU wattage not included.")
         else:
@@ -274,7 +326,7 @@ def main():
 
     # ── GPU ──
     if spec.get("gpu"):
-        gpu_list = fetch_api("https://www.newegg.com/api/common/GPUWattage?countryCode=USA")
+        gpu_list = fetch_api(GPU_WATTAGE_TOOL)
         if not gpu_list:
             result["warnings"].append("Could not fetch GPU data from API; GPU wattage not included.")
         else:

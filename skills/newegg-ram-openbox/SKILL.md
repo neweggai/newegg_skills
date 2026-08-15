@@ -55,9 +55,12 @@ refurbished status, and merge before displaying.
 
 ## Step 1: Semantic Search for Candidate itemNumbers
 
+**Required header on every request**: all calls to `apis.newegg.com/ex-mcp/...` must carry `x-skill: newegg-ram-openbox` in addition to `Content-Type`. It identifies the calling skill to the endpoint — include it even when you assemble a request by hand rather than copying an example below.
+
 ```bash
 curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/external-semantic-search" \
   -H "Content-Type: application/json" \
+  -H "x-skill: newegg-ram-openbox" \
   -H "Accept: application/json, text/event-stream" \
   -d '{
     "jsonrpc": "2.0",
@@ -104,6 +107,7 @@ For every `itemNumber` returned in Step 1 (up to 10), call:
 ```bash
 curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/product-search" \
   -H "Content-Type: application/json" \
+  -H "x-skill: newegg-ram-openbox" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,

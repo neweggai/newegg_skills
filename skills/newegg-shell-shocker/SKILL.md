@@ -13,15 +13,20 @@ Query Newegg Shell Shocker daily and next-day flash deal products.
 
 ## Agent execution rules (read first)
 
-- **Do not** call `ask_clarification` for this task. The data source (single public GET JSON) and the output format (Markdown tables below) are **fully specified** — this is **not** `missing_info`, `ambiguous_requirement`, or `approach_choice`.
+- **Do not** call `ask_clarification` for this task. The data source (one public JSON-RPC call, no auth) and the output format (Markdown tables below) are **fully specified** — this is **not** `missing_info`, `ambiguous_requirement`, or `approach_choice`.
 - **Immediately** after loading this skill, use the **`bash` tool** to run curl. **Do not** ask the user how to fetch data or which output format they prefer.
+- **Required header on every request**: all calls to `apis.newegg.com/ex-mcp/...` must carry `x-skill: newegg-shell-shocker` in addition to `Content-Type`. It identifies the calling skill to the endpoint — include it even when you assemble a request by hand rather than copying the example below.
 - Run exactly:
 
 ```bash
-curl -sS "https://www.newegg.com/api/Common/TomorrowShellShocker"
+curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/website-www-tool" \
+  -H "Content-Type: application/json" \
+  -H "x-skill: newegg-shell-shocker" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"getapi_home_v2_shellshocker_page","arguments":{"CountryCode":"USA","CompanyCode":1003}}}'
 ```
 
-- Treat stdout as JSON and build the tables in **Response Format**. If curl fails (non-zero exit) or the body is not valid JSON, report the error in your reply — still **without** asking the user to choose a fetch method.
+- Unwrap the response before reading it (see **Response Structure**), then build the tables in **Response Format**. If curl fails (non-zero exit), the envelope carries `error`, `result.isError` is true, or the body is not valid JSON, report the error in your reply — still **without** asking the user to choose a fetch method.
 
 ## Trigger Scenarios
 
@@ -32,13 +37,20 @@ curl -sS "https://www.newegg.com/api/Common/TomorrowShellShocker"
 
 ## API
 
-- **Method**: GET
-- **URL**: `https://www.newegg.com/api/Common/TomorrowShellShocker`
-- **Request**: No request body
+- **Method**: POST (JSON-RPC `tools/call`)
+- **Endpoint**: `https://apis.newegg.com/ex-mcp/endpoint/website-www-tool`
+- **Tool name**: `getapi_home_v2_shellshocker_page`
+- **Arguments**: `CountryCode` (`USA`) and `CompanyCode` (`1003`) are both required; `priceTypes` is optional
+- **Auth**: none — no API key, no MCP client registration, no handshake
 
 ## Response Structure
 
-Root object contains:
+**Unwrap first.** The payload sits at `result.content[0].text` as a JSON *string*, and decoding it
+can yield another JSON string before you reach the object. Keep decoding until you have a dict with
+`TodayItems` — do not assume a single `json.loads` is enough. `result.structuredContent` carries the
+same object when present and is the shortcut.
+
+After unwrapping, the root object contains:
 - `TodayItems` (array) - Today's flash deal items
 - `TomorrowItems` (array) - Tomorrow's flash deal items
 
@@ -106,14 +118,34 @@ Return a clear product table containing:
 ## Example Request
 
 ```bash
-curl -sS "https://www.newegg.com/api/Common/TomorrowShellShocker"
+curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/website-www-tool" \
+  -H "Content-Type: application/json" \
+  -H "x-skill: newegg-shell-shocker" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"getapi_home_v2_shellshocker_page","arguments":{"CountryCode":"USA","CompanyCode":1003}}}'
 ```
 
-(`-sS` keeps output clean but still surfaces curl errors.)
+(`-sS` keeps output clean but still surfaces curl errors.) On Windows use `curl.exe` explicitly —
+plain `curl` in PowerShell is the `Invoke-WebRequest` alias and does not understand `-d`.
+
+Piping through `jq` to unwrap and keep the output small:
+
+```bash
+curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/website-www-tool" \
+  -H "Content-Type: application/json" \
+  -H "x-skill: newegg-shell-shocker" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"getapi_home_v2_shellshocker_page","arguments":{"CountryCode":"USA","CompanyCode":1003}}}' \
+  | jq -r '.result.content[0].text' | jq -r 'if type=="string" then fromjson else . end' \
+  | jq '{today: [.TodayItems[]?.ItemBase | select(.) | {Item, Title: .Description.Title}], tomorrow: (.TomorrowItems|length)}'
+```
+
+`select(.)` drops the combo rows, whose `ItemBase` is `null` — without it jq emits a
+`{"Item":null,"Title":null}` row rather than erroring, and that empty row ends up in the table.
 
 ## Notes
 
-- This API requires no authentication
+- This endpoint requires no authentication
 - Returned data is in English; product names can be translated if needed
 - Prices are in USD
 - Image URLs support multiple sizes; default to `ProductImageCompressAll` path

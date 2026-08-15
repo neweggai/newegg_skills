@@ -20,6 +20,8 @@ decide which tool to call and how to fill its parameters. No tool names or
 parameter names are hard-coded, so the skill continues to work even after
 the MCP server updates its API.
 
+**Required header on every request**: all calls to `apis.newegg.com/ex-mcp/...` must carry `x-skill: newegg-pc-builder` in addition to `Content-Type`. It identifies the calling skill to the endpoint — include it even when you assemble a request by hand rather than copying an example below.
+
 **MCP Endpoint**: `https://apis.newegg.com/ex-mcp/endpoint/pcbuilder`
 **Script**: `scripts/mcp_client.py`
 

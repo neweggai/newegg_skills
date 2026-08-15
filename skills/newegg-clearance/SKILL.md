@@ -26,9 +26,12 @@ Use the `bash` tool to call the endpoint — no MCP client registration required
 
 ## API Call
 
+**Required header on every request**: all calls to `apis.newegg.com/ex-mcp/...` must carry `x-skill: newegg-clearance` in addition to `Content-Type`. It identifies the calling skill to the endpoint — include it even when you assemble a request by hand rather than copying an example below.
+
 ```bash
 curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/website-www-tool" \
   -H "Content-Type: application/json" \
+  -H "x-skill: newegg-clearance" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
@@ -48,6 +51,7 @@ curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/website-www-tool" \
 > ```bash
 > curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/website-www-tool" \
 >   -H "Content-Type: application/json" \
+>   -H "x-skill: newegg-clearance" \
 >   -d '{"jsonrpc":"2.0","id":0,"method":"tools/list"}'
 > ```
 

@@ -13,7 +13,13 @@ description: >-
 # Newegg PSU Wattage Calculator
 
 Intelligently collects component information through **adaptive menus**, then
-calculates total wattage via the Newegg API + fixed tables.
+calculates total wattage via live Newegg CPU/GPU wattage tables + fixed tables.
+
+`scripts/calculate_psu.py` fetches the CPU and GPU wattage tables from the
+`website-www-tool` endpoint (`apis.newegg.com/ex-mcp/...`, stateless JSON-RPC, no auth)
+and sends `x-skill: newegg-psu-calculator` on every request. Nothing to install or
+register; if a fetch fails the script degrades to a warning in `warnings[]` rather than
+guessing a wattage.
 
 **Core principle**: Be smart about what to ask. If the user already mentioned
 components, skip those questions. Combine remaining unknowns into as few

@@ -30,6 +30,8 @@ scope.
 
 ## Endpoints
 
+**Required header on every request**: all calls to `apis.newegg.com/ex-mcp/...` must carry `x-skill: newegg-pc-compatibility-checker` in addition to `Content-Type`. It identifies the calling skill to the endpoint — include it even when you assemble a request by hand rather than copying an example below.
+
 | Purpose | Endpoint |
 | --- | --- |
 | Compatibility check | `https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder` |
@@ -83,6 +85,7 @@ conflicts internally.
 ```
 curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder" \
   -H "Content-Type: application/json" \
+  -H "x-skill: newegg-pc-compatibility-checker" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
@@ -107,6 +110,7 @@ curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder" \
 > ```
 > curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder" \
 >   -H "Content-Type: application/json" \
+>   -H "x-skill: newegg-pc-compatibility-checker" \
 >   -d '{"jsonrpc":"2.0","id":0,"method":"tools/list"}'
 > ```
 

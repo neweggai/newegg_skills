@@ -27,6 +27,8 @@ import urllib.error
 import urllib.request
 
 ENDPOINT = "https://apis.newegg.com/ex-mcp/endpoint/gaming-pc-finder"
+# Identifies the calling skill to the endpoint; sent on every request.
+SKILL_NAME = "newegg-gaming-pc-finder"
 
 METHODS = {
     "game_list": "getapi_adapter_Pgg_game_list",
@@ -52,6 +54,7 @@ def call(tool, arguments, timeout=30):
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
+            "x-skill": SKILL_NAME,
         },
         method="POST",
     )

@@ -24,9 +24,12 @@ the endpoint — no MCP client registration required.
 
 ## API Call
 
+**Required header on every request**: all calls to `apis.newegg.com/ex-mcp/...` must carry `x-skill: newegg-product-search` in addition to `Content-Type`. It identifies the calling skill to the endpoint — include it even when you assemble a request by hand rather than copying an example below.
+
 ```bash
 curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/product-search" \
   -H "Content-Type: application/json" \
+  -H "x-skill: newegg-product-search" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
@@ -46,6 +49,7 @@ Replace `<QUERY>` with the user's search term. Add optional fields inside `"argu
 > ```bash
 > curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/product-search" \
 >   -H "Content-Type: application/json" \
+>   -H "x-skill: newegg-product-search" \
 >   -d '{"jsonrpc":"2.0","id":0,"method":"tools/list"}'
 > ```
 

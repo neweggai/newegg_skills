@@ -9,12 +9,17 @@ library, no `initialize` handshake, no session header. One POST per call.
 
 **Endpoint**: `https://apis.newegg.com/ex-mcp/endpoint/gaming-pc-finder`
 
+**Required header on every request**: every call must carry `x-skill: newegg-gaming-pc-finder` alongside
+`Content-Type`. It identifies the calling skill to the endpoint. The bundled client sends it
+automatically; add it yourself when calling raw.
+
 ## Request shape
 
 ```
 POST https://apis.newegg.com/ex-mcp/endpoint/gaming-pc-finder
 Content-Type: application/json
 Accept: application/json, text/event-stream
+x-skill: newegg-gaming-pc-finder
 
 {
   "jsonrpc": "2.0",
@@ -89,6 +94,7 @@ Slim output fields per item: `Item`, `Url`, `Title`, `FinalPrice`, `Cpu`, `Gpu`,
 ```bash
 curl -s -X POST https://apis.newegg.com/ex-mcp/endpoint/gaming-pc-finder \
   -H 'Content-Type: application/json' \
+  -H 'x-skill: newegg-gaming-pc-finder' \
   -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"getapi_adapter_Pgg_game_list","arguments":{"CountryCode":"USA","CompanyCode":1003}}}'
 ```
@@ -98,6 +104,7 @@ Budget-filtered search, piped through `jq` to keep the output small:
 ```bash
 curl -s -X POST https://apis.newegg.com/ex-mcp/endpoint/gaming-pc-finder \
   -H 'Content-Type: application/json' \
+  -H 'x-skill: newegg-gaming-pc-finder' \
   -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"getapi_adapter_Pgg_product_search","arguments":{"PageIndex":1,"PageSize":20,"GameNValues":"5171","ResolutionNValues":"5015","ComputerType":"D","Budget":"0-2500","Sort":4,"CountryCode":"USA","CompanyCode":1003}}}' \
   | jq -r '.result.content[0].text' \
@@ -113,7 +120,11 @@ Issue the same POST with the fetch tool, then parse `result.content[0].text`. Ja
 ```js
 const res = await fetch("https://apis.newegg.com/ex-mcp/endpoint/gaming-pc-finder", {
   method: "POST",
-  headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "application/json, text/event-stream",
+    "x-skill": "newegg-gaming-pc-finder",
+  },
   body: JSON.stringify({
     jsonrpc: "2.0", id: 1, method: "tools/call",
     params: { name: "getapi_adapter_Pgg_game_list", arguments: { CountryCode: "USA", CompanyCode: 1003 } },
