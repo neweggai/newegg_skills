@@ -50,13 +50,20 @@ Then proceed to collect only the **missing** information.
 ## Phase 1 — Collect unknowns via AskUserQuestion
 
 Group missing components into **at most 2 AskUserQuestion calls**.
+This ≤2-round limit applies **only to collecting parts** (Phase 1). It does **not**
+forbid a Phase 3 optional follow-up (e.g. asking whether the user wants a higher-wattage link).
 
 ### Grouping strategy
 
-- **Round A** (core): CPU (if unknown) + GPU (if unknown)
+- **Round A** (core): CPU (if unknown) + GPU (if unknown) — **must be one call**.
+  Never split Round A into separate CPU-only then GPU-only turns when both are unknown.
 - **Round B** (peripherals): RAM + storage (if unknown)
 - If only 1 or 2 things are missing, combine them all into 1 call.
 - If everything is already known, skip directly to Phase 2.
+- **Threadripper / HEDT** (e.g. Threadripper, Threadripper PRO): if motherboard form
+  factor is unknown, ask for it in the same round when possible; if still unknown,
+  use `SSI CEB` or `SSI EEB` (150W), **not** silent consumer ATX. Menu "Other" Threadripper
+  labels are model examples only — not a motherboard special-case by themselves.
 
 ### Adaptive question wording
 
@@ -220,11 +227,14 @@ python3 <skill_base_dir>/scripts/calculate_psu.py '<json_spec>'
 | Ryzen 7 9800X3D | `cpu` | `"Ryzen 7 9800X3D"` |
 | RTX 5080 | `gpu` | `"RTX 5080"` |
 | 2 GPUs | `gpu_count` | `2` |
-| ATX (default) | `mb` | `"ATX"` |
+| ATX (default) | `mb` | `"ATX"` (if omitted, script defaults ATX — **label as default** in Phase 3) |
+| Threadripper, mb unknown | `mb` | `"SSI CEB"` or `"SSI EEB"` (prefer asking first) |
 | 16GB DDR5 × 2 | `ram` + `ram_count` | `"16GB DDR5"`, `2` |
 | SSD 1TB+ | `ssd` | `"1TB+"` |
 | 2 × SSD 1TB+ | `ssd` + `ssd_count` | `"1TB+"`, `2` |
 | HDD 7200RPM | `hdd` | `"7200RPM 3.5\""` |
+| No discrete GPU / iGPU / 无独显 / 核显 / none / Not decided yet | `gpu` | **Omit `gpu`**, or `""`, or pass the phrase (script maps known phrases → 0W). Do **not** invent a discrete model. |
+| User said "no GPU" in free text not in the script list | — | Prefer omit `gpu` / `""` / a known phrase rather than a prose string that may only warn |
 
 **Example:**
 ```bash
@@ -236,20 +246,48 @@ python3 /path/to/scripts/calculate_psu.py \
 
 ## Phase 3 — Present results
 
-The script outputs JSON with `total_watts` and `recommended_psu_watts`.
+Script JSON fields (use these; do not invent numbers):
 
-Show the user:
+| Field | Meaning |
+|-------|---------|
+| `total_watts` | Component sum |
+| `headroom_watts` | `total_watts × 1.2` |
+| `recommended_psu_watts` | **Sole main recommendation** (catalog tier) |
+| `catalog_floor_applied` | `true` when headroom &lt; 550 but rec is 550 |
+| `optional_higher_tier_watts` | Next tier above main (for verbal mention / later link only) |
+| `recommendation_note` | Wording guidance — follow it |
+| `shop_url` | First (and only) link in the first reply; wattage == main rec |
 
-1. **Component breakdown table** — type, name, watts, count × subtotal
-2. **Total system draw** — `total_watts`
-3. **Recommended PSU** — `recommended_psu_watts` (already includes 20% safety buffer)
-4. **PSU tier note**:
-   - ≤650W → 650W PSU, Gold certification OK
-   - 651–850W → 850W PSU, Gold minimum
-   - 851–1000W → 1000W PSU, Platinum recommended
-   - 1001W+ → 1200W PSU, Platinum/Titanium
+### Hard rules — ticket #14 (main rec / wording / link must align)
+
+1. **Main recommendation** = `recommended_psu_watts` only. Never treat a higher tier as the primary pick.
+2. **First shop link** = `shop_url` (or build URL with the **same** wattage). Forbidden: main says 550W but link is `d=650W`, or main says 750W while copy pushes 650W as the buy target.
+3. You may **verbally** mention `optional_higher_tier_watts` for upgrade headroom (one short sentence). That mention is **not** a second recommendation and must not get a link yet.
+4. **End of first reply:** ask if they want a higher-wattage shop link. Give a second link **only after** the user agrees.
+5. Do **not** dump multiple conflicting wattages + multiple links in the first reply.
+
+### Hard rules — ticket #15 (550 floor wording)
+
+1. Keep **550W** as the default minimum purchase tier (do not change script floor to 450/500).
+2. When `catalog_floor_applied` is `true` (typical iGPU / low-draw builds ~150–210W):
+   - **Do not** say the 550W pick “已含 20% 余量” / “already includes 20% safety margin” as if 550 ≈ draw×1.2.
+   - **Do** say: after ×1.2 the need is still well below 550; **550W is the starting catalog tier** we recommend for modular Gold availability/quality.
+   - Optional: user may choose a lower-wattage PSU themselves; **our shop link stays at 550W**.
+3. When `catalog_floor_applied` is `false`, you may say the tier includes ~20% headroom then rounds up to the next catalog tier — still keep main rec and first link identical.
+4. Prefer `recommendation_note` from the script when unsure.
+
+### Presentation order
+
+1. **Component breakdown table** — type, name, watts, count × subtotal  
+   - If motherboard was not specified by the user, label it as **ATX (default)** (or whatever default the script used).
+2. **Total system draw** — `total_watts` (optionally show `headroom_watts`)
+3. **Recommended PSU** — `recommended_psu_watts` only, with #15-compliant wording
+4. **PSU tiers** (must match `PSU_TIERS` in `calculate_psu.py`): 550 · 650 · 750 · 850 · 1000 · 1200 · 1600  
+   - Guidance: 550–750 Gold modular OK; 850+ prefer Gold minimum; 1000+ Platinum when budget allows.
 5. **PCIe connector note** — for RTX 5000 series: must have PCIe 5.0 16-pin (600W native)
-6. **Newegg shop link**: `https://www.newegg.com/p/pl?d=<WATTS>W+PSU+modular+gold`
+6. **First Newegg shop link** — `shop_url` (wattage == main recommendation)
+7. Optional one-line higher-tier mention + **ask** before any second link
+8. **Existing PSU comparison:** only if the user clearly stated an existing PSU **in this turn**. Never invent “you already have a 750W PSU.”
 
 ---
 

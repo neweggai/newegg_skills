@@ -26,9 +26,18 @@ Example:
 """
 
 import json
+import re
 import sys
 import urllib.request
 from difflib import SequenceMatcher
+
+# Stage-4 GPU guess must beat this; equality is rejected (T400 vs "我没有 4090" == 0.50).
+GPU_FUZZY_MIN_SIMILARITY = 0.5
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+_GPU_NEGATION_RE = re.compile(
+    r"(没有|沒有|不是|不要|别买|別買|don't|do not|\bnot\b|\bno\b)",
+    re.IGNORECASE,
+)
 
 
 # ──────────────────────────────────────────────
@@ -163,14 +172,81 @@ def similarity(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
-def fuzzy_match(query, candidates, key):
+def allow_gpu_stage4_similarity(query):
+    """Refuse last-resort similarity guesses for sentence-like GPU strings.
+
+    Model tokens (RTX 5080, 4090, GT 730) still match on stages 1-3.
+    Prose such as "我没有 4090" must not pick a random short SKU (T400).
+    """
+    q = (query or "").strip()
+    if not q:
+        return False
+    if _CJK_RE.search(q):
+        return False
+    if _GPU_NEGATION_RE.search(q):
+        return False
+    return True
+
+
+def is_no_discrete_gpu(query):
+    """True for explicit iGPU / no add-in GPU phrases (auxiliary filter)."""
+    if query is None:
+        return True
+    q = str(query).lower().strip()
+    if not q:
+        return True
+    compact = " ".join("".join(ch if ch.isalnum() or ch.isspace() else " " for ch in q).split())
+    exact = {
+        "no discrete gpu",
+        "no discrete graphics",
+        "no dedicated gpu",
+        "no dedicated graphics",
+        "integrated graphics",
+        "integrated gpu",
+        "integrated",
+        "onboard graphics",
+        "igpu",
+        "none",
+        "n/a",
+        "na",
+        "null",
+        "not decided yet",
+        "undecided",
+        "无独显",
+        "没有独显",
+        "無獨顯",
+        "核显",
+        "核顯",
+        "内显",
+        "內顯",
+    }
+    if compact in exact or q in exact:
+        return True
+    markers = (
+        "no discrete",
+        "no dedicated",
+        "integrated graphic",
+        "integrated gpu",
+        "onboard graphic",
+        "not decided",
+        "核显",
+        "核顯",
+        "无独显",
+        "無獨顯",
+        "没有独显",
+        "沒有獨顯",
+    )
+    return any(m in q for m in markers)
+
+
+def fuzzy_match(query, candidates, key, min_similarity=None, allow_similarity_fallback=True):
     """Find best matching item in candidates list by key field.
 
     Priority:
     1. Exact case-insensitive match on the key field
     2. Query is a suffix/prefix-boundary match (avoids "7950X" -> "7950X3D")
     3. All query words appear in the candidate, prefer shorter candidate names
-    4. Highest character similarity
+    4. Highest character similarity (optional; GPU uses a floor and may skip)
     """
     q = query.lower().strip()
     q_words = q.split()
@@ -182,7 +258,6 @@ def fuzzy_match(query, candidates, key):
 
     # 2. Boundary-aware substring: each query word must appear as a whole word
     #    or at the end of the string (prevents "7950X" matching "7950X3D")
-    import re
     def all_words_boundary(q_words, text):
         text = text.lower()
         for w in q_words:
@@ -204,9 +279,14 @@ def fuzzy_match(query, candidates, key):
     if word_hits:
         return min(word_hits, key=lambda x: abs(len(x[key]) - len(q)))
 
-    # 4. Best similarity score
-    scored = sorted(candidates, key=lambda x: -similarity(q, x[key].lower()))
-    return scored[0] if scored else None
+    # 4. Best similarity score (GPU: skip prose; require score strictly above floor)
+    if not allow_similarity_fallback or not candidates:
+        return None
+    best = max(candidates, key=lambda x: similarity(q, x[key].lower()))
+    score = similarity(q, best[key].lower())
+    if min_similarity is not None and score <= min_similarity:
+        return None
+    return best
 
 
 def parse_watts(w_str):
@@ -229,7 +309,13 @@ def lookup_cpu(query, cpu_list):
 
 
 def lookup_gpu(query, gpu_list):
-    match = fuzzy_match(query, gpu_list, "GPU")
+    match = fuzzy_match(
+        query,
+        gpu_list,
+        "GPU",
+        min_similarity=GPU_FUZZY_MIN_SIMILARITY,
+        allow_similarity_fallback=allow_gpu_stage4_similarity(query),
+    )
     if match:
         return match["GPU"], parse_watts(match["Wattage"])
     return None, 0.0
@@ -280,12 +366,40 @@ def lookup_optical(optical_str):
 
 
 def recommend_psu(total_watts):
-    """Round up to next standard PSU tier with ~20% headroom."""
+    """Round up to next standard PSU tier with ~20% headroom.
+
+    Returns (recommended_tier, headroom_target_watts).
+    """
     target = total_watts * 1.2
     for tier in PSU_TIERS:
         if tier >= target:
+            return tier, target
+    return PSU_TIERS[-1], target
+
+
+def next_psu_tier(recommended_watts):
+    """Next catalog tier above the main recommendation, or None."""
+    for tier in PSU_TIERS:
+        if tier > recommended_watts:
             return tier
-    return PSU_TIERS[-1]
+    return None
+
+
+def build_recommendation_note(total_watts, headroom_watts, recommended, floor_applied):
+    """Agent-facing note for Phase 3 wording (D14/D15)."""
+    if floor_applied:
+        return (
+            f"System draw {total_watts}W; after x1.2 headroom ~{headroom_watts}W, "
+            f"still below the 550W catalog floor. Main recommendation is 550W as the "
+            f"starting purchase tier (modular Gold availability)—not because the build "
+            f"needs ~550W continuous, and not because 550W equals the 20% margin alone. "
+            f"Users may pick a lower-wattage PSU on their own; the shop link stays at 550W."
+        )
+    return (
+        f"System draw {total_watts}W; after x1.2 headroom ~{headroom_watts}W, "
+        f"rounded up to the next catalog tier {recommended}W. "
+        f"Main recommendation and first shop link must both be {recommended}W."
+    )
 
 
 # ──────────────────────────────────────────────
@@ -306,7 +420,12 @@ def main():
     result = {
         "components": [],
         "total_watts": 0.0,
+        "headroom_watts": 0.0,
         "recommended_psu_watts": 0,
+        "catalog_floor_applied": False,
+        "optional_higher_tier_watts": None,
+        "recommendation_note": "",
+        "shop_url": "",
         "warnings": [],
     }
     total = 0.0
@@ -325,12 +444,23 @@ def main():
                 result["warnings"].append(f"CPU '{spec['cpu']}' not found in API data.")
 
     # ── GPU ──
-    if spec.get("gpu"):
+    # Auxiliary: known iGPU / no-dGPU phrases => 0W (do not fuzzy-match).
+    # Stage-4: skip sentence-like queries; refuse similarity <= 0.5 (T400 / 我没有 4090).
+    gpu_raw = spec.get("gpu")
+    if gpu_raw is not None and str(gpu_raw).strip() and is_no_discrete_gpu(gpu_raw):
+        result["components"].append({
+            "type": "GPU",
+            "name": "No discrete GPU (iGPU)",
+            "watts": 0.0,
+            "count": 1,
+            "subtotal": 0.0,
+        })
+    elif gpu_raw is not None and str(gpu_raw).strip():
         gpu_list = fetch_api(GPU_WATTAGE_TOOL)
         if not gpu_list:
             result["warnings"].append("Could not fetch GPU data from API; GPU wattage not included.")
         else:
-            name, watts = lookup_gpu(spec["gpu"], gpu_list)
+            name, watts = lookup_gpu(gpu_raw, gpu_list)
             qty = int(spec.get("gpu_count", 1))
             if name:
                 total += watts * qty
@@ -339,13 +469,19 @@ def main():
                     "count": qty, "subtotal": watts * qty
                 })
             else:
-                result["warnings"].append(f"GPU '{spec['gpu']}' not found in API data.")
+                result["warnings"].append(
+                    f"GPU '{gpu_raw}' not found or low-confidence match ignored; "
+                    f"GPU wattage not included."
+                )
 
     # ── Motherboard ──
-    mb = spec.get("mb", "ATX")
+    mb_raw = spec.get("mb")
+    mb_defaulted = not (mb_raw is not None and str(mb_raw).strip())
+    mb = "ATX" if mb_defaulted else str(mb_raw).strip()
     mb_watts = lookup_mb(mb)
     total += mb_watts
-    result["components"].append({"type": "Motherboard", "name": mb, "watts": mb_watts})
+    mb_name = f"{mb} (default)" if mb_defaulted else mb
+    result["components"].append({"type": "Motherboard", "name": mb_name, "watts": mb_watts})
 
     # ── RAM ──
     if spec.get("ram"):
@@ -386,8 +522,22 @@ def main():
         })
 
     total = round(total, 1)
+    recommended, headroom = recommend_psu(total)
+    headroom = round(headroom, 1)
+    floor_applied = recommended == PSU_TIERS[0] and headroom < PSU_TIERS[0]
+    higher = next_psu_tier(recommended)
+
     result["total_watts"] = total
-    result["recommended_psu_watts"] = recommend_psu(total)
+    result["headroom_watts"] = headroom
+    result["recommended_psu_watts"] = recommended
+    result["catalog_floor_applied"] = floor_applied
+    result["optional_higher_tier_watts"] = higher
+    result["recommendation_note"] = build_recommendation_note(
+        total, headroom, recommended, floor_applied
+    )
+    result["shop_url"] = (
+        f"https://www.newegg.com/p/pl?d={recommended}W+PSU+modular+gold"
+    )
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
