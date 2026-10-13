@@ -25,8 +25,6 @@ import uuid
 
 MCP_ENDPOINT = "https://apis.newegg.com/ex-mcp/endpoint/pc-build-upgrade"
 TIMEOUT = 60  # bumped from 30s: conversation_id follow-up calls have been observed to take longer
-# Identifies the calling skill to the endpoint; sent on every request.
-SKILL_NAME = "newegg-pc-builder-v2"
 
 
 # ── HTTP layer ────────────────────────────────────────────────────────────────
@@ -39,7 +37,6 @@ def _post(payload: dict) -> dict:
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
-            "x-skill": SKILL_NAME,
         },
         method="POST",
     )

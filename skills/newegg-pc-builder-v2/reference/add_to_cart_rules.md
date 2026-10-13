@@ -59,14 +59,14 @@ text sent after the tool call.
 ## Link construction rule (hard requirement)
 
 ```
-https://secure.newegg.com/api/shop/add?Submit=Add&ItemList=<item1>.PCDIY14|<qty1>%2C<item2>.PCDIY14|<qty2>%2C...
+https://secure.newegg.com/api/shop/add?Submit=Add&ItemList=<item1>.PCDIY4|<qty1>%2C<item2>.PCDIY4|<qty2>%2C...
 ```
 
 1. For every component actually on the current card, use its **raw**
    `itemNumber` — **no N82E168 conversion** (unlike the product-link rule)
    — whether standard (`19-113-842`) or marketplace format
    (`1HU-024C-000C2`), both used as-is
-2. Format each as `<itemNumber>.PCDIY14|<quantity>`, quantity defaults to
+2. Format each as `<itemNumber>.PCDIY4|<quantity>`, quantity defaults to
    `1` unless the user asked for more of a specific part
 3. Join with `%2C` (URL-encoded comma)
 4. Final URL = `https://secure.newegg.com/api/shop/add?Submit=Add&ItemList=`
@@ -80,5 +80,5 @@ https://secure.newegg.com/api/shop/add?Submit=Add&ItemList=<item1>.PCDIY14|<qty1
 
 **Example** (CPU `19-113-842`, motherboard `13-162-187`, GPU `14-131-886`):
 ```
-https://secure.newegg.com/api/shop/add?Submit=Add&ItemList=19-113-842.PCDIY14|1%2C13-162-187.PCDIY14|1%2C14-131-886.PCDIY14|1
+https://secure.newegg.com/api/shop/add?Submit=Add&ItemList=19-113-842.PCDIY4|1%2C13-162-187.PCDIY4|1%2C14-131-886.PCDIY4|1
 ```

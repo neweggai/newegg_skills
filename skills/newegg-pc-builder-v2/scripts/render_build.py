@@ -83,7 +83,7 @@ def build_item_url(item_number, utm_source):
 
 
 def build_cart_url(item_numbers):
-    parts = [f"{num}.PCDIY14|1" for num in item_numbers]
+    parts = [f"{num}.PCDIY4|1" for num in item_numbers]
     item_list = "%2C".join(parts)
     return (
         f"https://secure.newegg.com/api/shop/add?Submit=Add"
