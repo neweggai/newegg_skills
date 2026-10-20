@@ -29,25 +29,36 @@ Order for obtaining the link:
    omitted — applies even to links already provided by the response:**
 
    ```
-   https://www.newegg.com/p/{ItemNumber}?Item={ItemNumber}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=pc-builder&utm_content=newegg-pc-builder
+   https://www.newegg.com/p/{ItemNumber}?Item={ItemNumber}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_pc-builder&utm_content=newegg-pc-builder
    ```
 
    `Item=` must exactly match the `{ItemNumber}` used in the path (same
-   conversion state — both converted, or both as-is). Examples:
+   conversion state — both converted, or both as-is). `{platform}` is the
+   same value in `utm_source` and inside `utm_campaign`. Examples:
    ```
-   https://www.newegg.com/p/9SIAD6HKKM2343?Item=9SIAD6HKKM2343&utm_source=claude&utm_medium=ai_skill&utm_campaign=pc-builder&utm_content=newegg-pc-builder
-   https://www.newegg.com/p/N82E16819113844?Item=N82E16819113844&utm_source=claude&utm_medium=ai_skill&utm_campaign=pc-builder&utm_content=newegg-pc-builder
+   https://www.newegg.com/p/9SIAD6HKKM2343?Item=9SIAD6HKKM2343&utm_source=claude&utm_medium=ai_skill&utm_campaign=aik_claude_pc-builder&utm_content=newegg-pc-builder
+   https://www.newegg.com/p/N82E16819113844?Item=N82E16819113844&utm_source=cursor&utm_medium=ai_skill&utm_campaign=aik_cursor_pc-builder&utm_content=newegg-pc-builder
+   https://www.newegg.com/p/N82E16819113844?Item=N82E16819113844&utm_source=other&utm_medium=ai_skill&utm_campaign=aik_other_pc-builder&utm_content=newegg-pc-builder
    ```
 
-   **`utm_source` is dynamic, not hardcoded** — determine via the method in
-   `reference/environment_detection.md`:
-   - Confirmed Claude environment → `utm_source=claude`
-   - Confirmed another Agent tool (e.g. Cursor) → reflect that tool, e.g.
-     `utm_source=cursor`, or `utm_source=ai_skill_other` if unsure which
-     one. This is based on the **triggering platform**, not which model is
-     running — Cursor-on-Claude-backend still gets `cursor`.
-   - Can't determine → `utm_source=unknown_agent`. Never guess a specific
-     platform name without evidence.
+   **UTM values:**
+   - **`utm_medium` is fixed**: always `ai_skill`.
+   - **`utm_source` is the platform this skill is running on** — determine
+     via the method in `reference/environment_detection.md`. Use that
+     platform's own name, lowercase. This is based on the **triggering
+     platform**, not which model is running — Cursor-on-Claude-backend
+     still gets `cursor`.
+     - Confirmed Claude environment → `utm_source=claude`
+     - Confirmed Cursor environment → `utm_source=cursor`
+     - Confirmed another Agent tool → that tool's name, e.g.
+       `utm_source=windsurf`
+     - Unknown or not identifiable → `utm_source=other`. Never use
+       `ai_skill_other` or `unknown_agent`. Never guess a specific
+       platform name without evidence.
+   - **`utm_campaign`** is `aik_` + the same `{platform}` used in
+     `utm_source` + `_pc-builder`. Claude → `aik_claude_pc-builder`;
+     Cursor → `aik_cursor_pc-builder`; unknown → `aik_other_pc-builder`.
+   - **`utm_content`** stays `newegg-pc-builder`.
 
    If a response-provided link already has a `?`, append with `&` instead
    of adding a second `?`.

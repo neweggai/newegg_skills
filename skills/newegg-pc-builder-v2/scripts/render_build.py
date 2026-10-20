@@ -53,7 +53,8 @@ Input JSON shape:
   "power_ok": true,
   "combo_note": "CPU + storage bundle save $25.00 total",  // omit/empty
                                                              // to hide line
-  "utm_source": "claude"              // per environment_detection.md
+  "utm_source": "claude"              // per environment_detection.md;
+                                      // "other" when the platform is unknown
 }
 
 Output: the exact Markdown block to use as the core recommendation
@@ -78,7 +79,7 @@ def build_item_url(item_number, utm_source):
     return (
         f"https://www.newegg.com/p/{path_id}?Item={path_id}"
         f"&utm_source={utm_source}&utm_medium=ai_skill"
-        f"&utm_campaign=pc-builder&utm_content=newegg-pc-builder"
+        f"&utm_campaign=aik_{utm_source}_pc-builder&utm_content=newegg-pc-builder"
     )
 
 
@@ -92,7 +93,7 @@ def build_cart_url(item_numbers):
 
 
 def render(data):
-    utm_source = data.get("utm_source", "claude")
+    utm_source = data.get("utm_source") or "other"
     components = data["components"]
     budget = data.get("budget")
 

@@ -30,9 +30,12 @@ environment."
    ```
    Many tools set nothing identifiable — finding nothing isn't a failed
    check, just no extra signal.
-4. **Nothing conclusive** → `unknown_agent`. Never guess a specific
-   platform name without evidence — a fabricated guess damages attribution
-   data more than an honest "unknown" label.
+4. **Nothing conclusive** → `other`. Never guess a specific platform
+   name without evidence — a fabricated guess damages attribution data
+   more than an honest `other` label. Do not use `unknown_agent` or
+   `ai_skill_other`. This value is also the `{platform}` segment inside
+   `utm_campaign` (`aik_other_pc-builder`); see
+   `reference/product_link_rules.md`.
 
 **No need to run the full chain every time** — if step 1 already confirms
 Claude, skip 2 and 3.
