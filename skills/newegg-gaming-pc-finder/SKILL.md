@@ -53,7 +53,7 @@ python scripts/pgg_api.py product_recommend GameNValues=5171 ResolutionNValues=5
 python scripts/pgg_api.py product_search GameNValues=5171 ResolutionNValues=5015 ComputerType=D Budget=0-2500 Sort=4 PageIndex=1 PageSize=20 --limit 10
 ```
 
-The script tags every per-system `Url` field it returns with UTM parameters via `--utm-source` (default `"claude"`) — see [`references/product_link_rules.md`](./references/product_link_rules.md) for how to determine the right value before calling the script.
+The script tags every per-system `Url` field it returns with UTM parameters via `--utm-source`. **Always pass it explicitly** — resolve the calling platform first per [`references/product_link_rules.md`](./references/product_link_rules.md); the script falls back to `"other"` when the flag is omitted, which loses the real attribution.
 
 - Arguments are `Key=Value` pairs using the exact API argument names documented in Steps 1–3 below.
 - `CountryCode=USA` / `CompanyCode=1003` are applied by default; override with `--country` /
@@ -214,8 +214,8 @@ This is the largest response in the flow — slim it before reading (bundled cli
 
 | # | System | Price | CPU / GPU | FPS (Wukong) | Spy Score | Performance | Rating |
 |---|---|---|---|---|---|---|---|
-| 1 | [Skytech O11 Vision](https://www.newegg.com/p/3D5-000Z-003U5?Item=3D5-000Z-003U5&utm_source={platform}&utm_medium=ai_skill&utm_campaign=gaming-pc-finder&utm_content=newegg-gaming-pc-finder) | $1,899.99 | Ryzen 7 7700X / RX 9070 XT | 35 fps | 25,706 | ⭐ Mainstream · Top 7% · 🕶️ VR | ⭐4.0 (1) |
-| 2 | [STORMCRAFT Phantom](https://www.newegg.com/p/83-420-035?Item=83-420-035&utm_source={platform}&utm_medium=ai_skill&utm_campaign=gaming-pc-finder&utm_content=newegg-gaming-pc-finder) | $2,499.99 | Ultra 7 265F / RTX 5080 | 50 fps | 28,460 | ⭐ Enthusiast · Top 4% · 🕶️ VR | ⭐4.4 (72) |
+| 1 | [Skytech O11 Vision](https://www.newegg.com/p/3D5-000Z-003U5?Item=3D5-000Z-003U5&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_gaming-pc-finder&utm_content=newegg-gaming-pc-finder) | $1,899.99 | Ryzen 7 7700X / RX 9070 XT | 35 fps | 25,706 | ⭐ Mainstream · Top 7% · 🕶️ VR | ⭐4.0 (1) |
+| 2 | [STORMCRAFT Phantom](https://www.newegg.com/p/83-420-035?Item=83-420-035&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_gaming-pc-finder&utm_content=newegg-gaming-pc-finder) | $2,499.99 | Ultra 7 265F / RTX 5080 | 50 fps | 28,460 | ⭐ Enthusiast · Top 4% · 🕶️ VR | ⭐4.4 (72) |
 
 💡 4K Wukong is demanding — the RX 9070 XT build lands ~35 fps and leaves budget headroom; the
 RTX 5080 build pushes ~50 fps at the top of your budget. "Spy Score" is the 3DMark Time Spy
@@ -265,7 +265,7 @@ build hits higher FPS") rather than emphasizing scarcity. Keep it concise and co
 
 | # | System | Price | CPU / GPU | FPS ({game}) | Spy Score | Performance | Rating |
 |---|---|---|---|---|---|---|---|
-| 1 | [Title](https://www.newegg.com/p/{Item}?Item={Item}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=gaming-pc-finder&utm_content=newegg-gaming-pc-finder) | $1,899.99 | Ryzen 7 7700X / RX 9070 XT | 35 fps | 25,706 | ⭐ Mainstream · Top 7% | ⭐4.0 (1) |
+| 1 | [Title](https://www.newegg.com/p/{Item}?Item={Item}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_gaming-pc-finder&utm_content=newegg-gaming-pc-finder) | $1,899.99 | Ryzen 7 7700X / RX 9070 XT | 35 fps | 25,706 | ⭐ Mainstream · Top 7% | ⭐4.0 (1) |
 | 2 | [Title](...) | ... | ... | ... | ... | ... | ... |
 
 💡 GPU drives your target-resolution frame rate; picks are ranked on real benchmark FPS. "Spy Score" is the 3DMark Time Spy result — a higher number means a stronger system overall.

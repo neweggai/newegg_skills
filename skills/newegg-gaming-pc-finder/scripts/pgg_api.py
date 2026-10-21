@@ -17,7 +17,7 @@ Options:
     --country XX   CountryCode (default USA)
     --company N    CompanyCode (default 1003)
     --timeout N    seconds (default 30)
-    --utm-source S calling platform for Newegg product-link tagging (default "claude")
+    --utm-source S calling platform for Newegg product-link tagging (default "other")
 
 Exit codes: 0 ok, 1 usage error, 2 transport/API error.
 """
@@ -35,20 +35,26 @@ SKILL_NAME = "newegg-gaming-pc-finder"
 # Same convention as newegg-pc-builder-v2's reference/product_link_rules.md.
 # utm_source is the calling platform, resolved by the agent per
 # environment_detection.md (Claude-exclusive tool present -> "claude", a
-# Cursor project signature -> "cursor", etc.; "unknown_agent" if undetermined)
+# Cursor project signature -> "cursor", etc.; "other" if undetermined)
 # and passed in via --utm-source -- never hardcode a guess. This tags only the
 # per-system product links; the separate Gaming PC Finder tool-page link uses
 # its own cm_sp marker (see SKILL.md) and is untouched by this helper.
-UTM_CAMPAIGN = "gaming-pc-finder"
+UTM_CAMPAIGN_SLUG = "gaming-pc-finder"
 UTM_CONTENT = "newegg-gaming-pc-finder"
+
+
+def build_campaign(utm_source):
+    """utm_campaign = aik_ + the platform used in utm_source + _<skill slug>."""
+    return f"aik_{utm_source}_{UTM_CAMPAIGN_SLUG}"
 
 
 def build_item_url(item_number, utm_source):
     """Tagged Newegg product-page link for a single item number."""
+    utm_source = utm_source or "other"
     return (
         f"https://www.newegg.com/p/{item_number}?Item={item_number}"
         f"&utm_source={utm_source}&utm_medium=ai_skill"
-        f"&utm_campaign={UTM_CAMPAIGN}&utm_content={UTM_CONTENT}"
+        f"&utm_campaign={build_campaign(utm_source)}&utm_content={UTM_CONTENT}"
     )
 
 
@@ -117,7 +123,7 @@ def fps_of(item):
     return item.get("Fps")
 
 
-def slim_item(item, utm_source="claude"):
+def slim_item(item, utm_source="other"):
     desc = item.get("Description") or {}
     review = item.get("Review") or {}
     feature = item.get("Feature") or {}
@@ -148,7 +154,7 @@ def names(bucket):
     return [b.get("Name") for b in (bucket or [])]
 
 
-def slim(tool, data, limit, utm_source="claude"):
+def slim(tool, data, limit, utm_source="other"):
     if tool == "game_list":
         return {
             "Games": [{"N": g["N"], "Name": g["Name"]} for g in data.get("GameInfos") or []],
@@ -193,7 +199,7 @@ def main(argv):
 
     raw = False
     limit = 20
-    utm_source = "claude"
+    utm_source = "other"
     arguments = {"CountryCode": "USA", "CompanyCode": 1003}
 
     rest = argv[1:]

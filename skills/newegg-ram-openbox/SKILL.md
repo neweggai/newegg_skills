@@ -209,7 +209,7 @@ Every product link must carry UTM tagging before display, see [`references/produ
 
 | # | Product | Price | Rating | Reviews | Status |
 |---|---|---|---|---|---|
-| 1 | [WebDescription](https://www.newegg.com/p/{ItemNumber}?Item={ItemNumber}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=ram-openbox&utm_content=newegg-ram-openbox) | $147.42 | ⭐4.4 | 850 | 🔄 Refurbished |
+| 1 | [WebDescription](https://www.newegg.com/p/{ItemNumber}?Item={ItemNumber}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_ram-openbox&utm_content=newegg-ram-openbox) | $147.42 | ⭐4.4 | 850 | 🔄 Refurbished |
 | 2 | ... | ... | ... | ... | ... |
 
 💡 Combines semantic relevance + price sorting

@@ -21,7 +21,7 @@ Use the `bash` tool to call the endpoint — no MCP client registration required
 - Use the **`bash`** tool to run the curl command below.
 - On curl failure or invalid JSON, report the error directly.
 - Display the **top 10 products** from the response.
-- **Browse all** link to `https://www.newegg.com/Clearance-Store/EventSaleStore/ID-697?utm_source={platform}&utm_medium=ai_skill&utm_campaign=clearance&utm_content=newegg-clearance` (UTM-tagged per [`references/product_link_rules.md`](./references/product_link_rules.md), same as every other link this skill shows)
+- **Browse all** link to `https://www.newegg.com/Clearance-Store/EventSaleStore/ID-697?utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_clearance&utm_content=newegg-clearance` (UTM-tagged per [`references/product_link_rules.md`](./references/product_link_rules.md), same as every other link this skill shows)
 - **Don't show image
 
 ## API Call
@@ -103,7 +103,7 @@ Each entry in `Products` has a top-level `ProductNumber` and an `ItemCell` objec
 
 | # | Product | Brand | Price | Rating | Reviews |
 |---|---------|-------|-------|--------|---------|
-| 1 | [SimplifiedLineDescription](https://www.newegg.com/p/{ProductNumber}?Item={ProductNumber}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=clearance&utm_content=newegg-clearance) | Manufactory | $PriceRangeMin | ⭐ RatingOneDecimal | HumanRating |
+| 1 | [SimplifiedLineDescription](https://www.newegg.com/p/{ProductNumber}?Item={ProductNumber}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_clearance&utm_content=newegg-clearance) | Manufactory | $PriceRangeMin | ⭐ RatingOneDecimal | HumanRating |
 | 2 | ... | ... | ... | ... | ... |
 ...
 

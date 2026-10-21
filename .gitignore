@@ -16,6 +16,10 @@
 .qoder/
 skills/newegg-pc-builder/.specstory/
 
+# Python 编译缓存
+__pycache__/
+*.py[cod]
+
 # 其他
 ./agents/
 

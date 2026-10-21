@@ -125,11 +125,11 @@ response → result.content[0].text → (parse as JSON) → PageProducts
 
 | # | Product | Price | Rating | Reviews |
 |---|---------|-------|--------|---------|
-| 1 | [WebDescription](https://www.newegg.com/p/{ItemNumber}?Item={ItemNumber}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=product-search&utm_content=newegg-product-search) | CurrentPriceText | ⭐ RatingOneDecimal | HumanRating |
+| 1 | [WebDescription](https://www.newegg.com/p/{ItemNumber}?Item={ItemNumber}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_product-search&utm_content=newegg-product-search) | CurrentPriceText | ⭐ RatingOneDecimal | HumanRating |
 | 2 | ... | ... | ... | ... |
 
 📄 Page {page} / {totalPage}  ·  {total} total results
-🔗 [View all on Newegg](https://www.newegg.com/p/pl?d={query}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=product-search&utm_content=newegg-product-search)
+🔗 [View all on Newegg](https://www.newegg.com/p/pl?d={query}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_product-search&utm_content=newegg-product-search)
 ```
 
 - If item is on sale, append savings below its row: `> 💸 Save PriceSaveText (was OriginalPriceText)`

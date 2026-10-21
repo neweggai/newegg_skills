@@ -50,7 +50,7 @@ works). Every link you actually show the user must be the **full UTM-tagged form
 display an item in the response, as a markdown hyperlink on the item's name**:
 
 ```
-[<name> (<item number>)](https://www.newegg.com/p/<item number>?Item=<item number>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker)
+[<name> (<item number>)](https://www.newegg.com/p/<item number>?Item=<item number>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker)
 ```
 
 for every checked part and every replacement part you propose. Never show the raw URL as its own
@@ -262,8 +262,8 @@ non-English-speaking user.
 
 | Part | Model / Item # | Price |
 | --- | --- | --- |
-| <category> | [<user's name for item 1> (<item number>)](https://www.newegg.com/p/<item number>?Item=<item number>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker) | $<price> |
-| <category> | [<user's name for item 2> (<item number>)](https://www.newegg.com/p/<item number>?Item=<item number>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker) | $<price> |
+| <category> | [<user's name for item 1> (<item number>)](https://www.newegg.com/p/<item number>?Item=<item number>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker) | $<price> |
+| <category> | [<user's name for item 2> (<item number>)](https://www.newegg.com/p/<item number>?Item=<item number>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker) | $<price> |
 
 All parts are compatible according to Newegg PC Compatibility Checker.
 
@@ -276,7 +276,7 @@ newegg-psu-calculator-backed verdict with both wattages, or the official calcula
 ```
 ## Compatibility check: ❌ Incompatible
 
-**Conflict 1: [<name1> (<item1>)](https://www.newegg.com/p/<item1>?Item=<item1>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker) ↔ [<name2> (<item2>)](https://www.newegg.com/p/<item2>?Item=<item2>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker)**
+**Conflict 1: [<name1> (<item1>)](https://www.newegg.com/p/<item1>?Item=<item1>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker) ↔ [<name2> (<item2>)](https://www.newegg.com/p/<item2>?Item=<item2>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker)**
 - <reasonTraces[0] translated> (original: <reasonTraces[0]>)
 - <reasonTraces[1] translated> (original: <reasonTraces[1]>)
 
@@ -285,7 +285,7 @@ newegg-psu-calculator-backed verdict with both wattages, or the official calcula
 ### Suggested fix
 | Conflict | Replacement | Price |
 | --- | --- | --- |
-| Conflict 1 | [<specific replacement part name> (<item number>)](https://www.newegg.com/p/<item number>?Item=<item number>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker) | $<price> |
+| Conflict 1 | [<specific replacement part name> (<item number>)](https://www.newegg.com/p/<item number>?Item=<item number>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker) | $<price> |
 
 ### Re-verification
 [call pc-builder again with the replacement → report new isCompatible]
@@ -295,7 +295,7 @@ newegg-psu-calculator-backed verdict with both wattages, or the official calcula
 
 * **Attach a Newegg product link to every item you display, as a hyperlink on its name, always
   UTM-tagged** per [`references/product_link_rules.md`](./references/product_link_rules.md) —
-  `[<name> (<item number>)](https://www.newegg.com/p/<ItemNumber>?Item=<ItemNumber>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker)`
+  `[<name> (<item number>)](https://www.newegg.com/p/<ItemNumber>?Item=<ItemNumber>&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_pc-compatibility-checker&utm_content=newegg-pc-compatibility-checker)`
   — never the bare `/p/<ItemNumber>` link with no query string. Applies whether it's a part the
   user asked about or a replacement you're suggesting. Never put the raw URL in its own table
   column or its own line; that's redundant next to a named hyperlink.

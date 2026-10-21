@@ -230,7 +230,7 @@ Map all selections to the JSON spec format and run:
 python3 <skill_base_dir>/scripts/calculate_psu.py '<json_spec>'
 ```
 
-The script tags every Newegg link it returns (`link` / `shop_url`) with UTM parameters using the JSON spec's optional `"utm_source"` key (defaults to `"claude"` if omitted) — see [`references/product_link_rules.md`](./references/product_link_rules.md) for how to determine the right value before calling the script.
+The script tags every Newegg link it returns (`link` / `shop_url`) with UTM parameters using the JSON spec's `"utm_source"` key. **Always set it explicitly** — resolve the calling platform first per [`references/product_link_rules.md`](./references/product_link_rules.md); omitting the key falls back to `"other"`, which loses the real attribution.
 
 **Mapping guide:**
 
@@ -270,7 +270,7 @@ Script JSON fields (use these; do not invent numbers):
 | `recommendation_note` | Wording guidance — follow it. Now also carries a live-data caveat (wattages come from a live table and can shift slightly between queries) — relay that in your own words once, don't ignore it. |
 | `shop_url` | Newegg "product list" (category-search) link at the same wattage — the same URL that was previously shown alone as the fallback. **Always show this too**, not only when `recommended_products` is empty — see the table format below. |
 | `recommended_products` | 0–5 real 80+ Gold-or-better PSUs at the recommended tier, each with `name`, `price`, `currency`, `link` (`newegg.com/p/<item#>`, UTM-tagged). Render as a numbered Markdown table — see "Recommended-products table format" below — never as inline bullets. |
-| `warnings[]` | Any component the script couldn't confidently identify (unrecognized motherboard/RAM/SSD/HDD/optical string, a non-numeric count, etc.) — see below. |
+| `warnings[]` | Any component the script couldn't confidently identify (unrecognized motherboard/RAM/SSD/HDD/optical string, a non-numeric count, a GPU matched only approximately, etc.) — see below. |
 
 **Always surface `warnings[]` to the user when non-empty**, even briefly. A component the script
 couldn't identify still affects the total (RAM: excluded entirely; SSD/HDD/optical: assumed a
@@ -278,6 +278,14 @@ stated default; motherboard: assumed ATX or SSI CEB with a note). Silently dropp
 defeats the point of the script producing one — the user should know a wattage might be
 under/over-stated for a part it couldn't confidently parse, ideally with a quick follow-up
 question to confirm what they actually meant.
+
+**A GPU component carrying `approximate_match: true`** (with `match_similarity`) is the one case
+where the number looks perfectly normal but may be for a different card entirely: the model the
+user typed isn't in Newegg's wattage table, so the script fell back to the closest name it had.
+Name the matched card and ask the user to confirm it before they buy on that tier — e.g. a
+mistyped `RTX 5O80` (letter O) resolves to a workstation `RTX A4500` at 200W instead of 360W,
+dropping a typical build a whole tier (650W → 550W). Never present an approximate match as
+if the user's own card was found.
 
 ### Recommended-products table format
 
@@ -289,11 +297,11 @@ first 5** as:
 ```markdown
 | # | Power Supply | Price |
 |---|---|---|
-| 1 | [Thermaltake Toughpower GT 850W 80 Plus Gold ATX 3.1](https://www.newegg.com/p/1HU-0014-006W8?Item=1HU-0014-006W8&utm_source=claude&utm_medium=ai_skill&utm_campaign=psu-calculator&utm_content=newegg-psu-calculator) | $79.99 |
-| 2 | [Cooler Master MWE V4 850W 80 PLUS Gold Fully Modular](https://www.newegg.com/p/17-171-248?Item=17-171-248&utm_source=claude&utm_medium=ai_skill&utm_campaign=psu-calculator&utm_content=newegg-psu-calculator) | $139.99 |
-| 3 | [Thermaltake Toughpower GF3 850W 80 Plus Gold](https://www.newegg.com/p/17-153-438?Item=17-153-438&utm_source=claude&utm_medium=ai_skill&utm_campaign=psu-calculator&utm_content=newegg-psu-calculator) | $121.99 |
-| 4 | [Thermaltake Toughpower GT 850W Snow 80 Plus Gold](https://www.newegg.com/p/17-153-473?Item=17-153-473&utm_source=claude&utm_medium=ai_skill&utm_campaign=psu-calculator&utm_content=newegg-psu-calculator) | $99.99 |
-| 5 | [darkFlash DG850 850W 80 PLUS Gold Fully Modular](https://www.newegg.com/p/17-950-002?Item=17-950-002&utm_source=claude&utm_medium=ai_skill&utm_campaign=psu-calculator&utm_content=newegg-psu-calculator) | $74.99 |
+| 1 | [Thermaltake Toughpower GT 850W 80 Plus Gold ATX 3.1](https://www.newegg.com/p/1HU-0014-006W8?Item=1HU-0014-006W8&utm_source=claude&utm_medium=ai_skill&utm_campaign=aik_claude_psu-calculator&utm_content=newegg-psu-calculator) | $79.99 |
+| 2 | [Cooler Master MWE V4 850W 80 PLUS Gold Fully Modular](https://www.newegg.com/p/17-171-248?Item=17-171-248&utm_source=claude&utm_medium=ai_skill&utm_campaign=aik_claude_psu-calculator&utm_content=newegg-psu-calculator) | $139.99 |
+| 3 | [Thermaltake Toughpower GF3 850W 80 Plus Gold](https://www.newegg.com/p/17-153-438?Item=17-153-438&utm_source=claude&utm_medium=ai_skill&utm_campaign=aik_claude_psu-calculator&utm_content=newegg-psu-calculator) | $121.99 |
+| 4 | [Thermaltake Toughpower GT 850W Snow 80 Plus Gold](https://www.newegg.com/p/17-153-473?Item=17-153-473&utm_source=claude&utm_medium=ai_skill&utm_campaign=aik_claude_psu-calculator&utm_content=newegg-psu-calculator) | $99.99 |
+| 5 | [darkFlash DG850 850W 80 PLUS Gold Fully Modular](https://www.newegg.com/p/17-950-002?Item=17-950-002&utm_source=claude&utm_medium=ai_skill&utm_campaign=aik_claude_psu-calculator&utm_content=newegg-psu-calculator) | $74.99 |
 
 More options: [Browse all {recommended_psu_watts}W Gold+ power supplies]({shop_url})
 ```

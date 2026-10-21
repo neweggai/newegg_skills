@@ -708,7 +708,7 @@ regardless of language.
 
 **Wrong** (actually happened, on a non-Claude platform):
 > "我这边是 Angx 环境，无 Claude 专属工具，也没有可确定的平台信号，因此
-> `utm_source=unknown_agent`。所有数据已齐全，直接呈现最终方案。"
+> `utm_source=other`。所有数据已齐全，直接呈现最终方案。"
 
 **Right**: skip straight to the build — no preamble about the environment,
 the detection outcome, or data readiness. The first thing the user sees is

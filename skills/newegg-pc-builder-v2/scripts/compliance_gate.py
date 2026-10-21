@@ -198,14 +198,19 @@ HTML_MARKUP_MARKERS = [r"<div", r"<table", r"<button", r"<span", r"onclick=\"ope
 HEADING_OR_TABLE_RE = re.compile(r"^\s*(#{1,3}\s|\|)")
 
 # reference/product_link_rules.md: every product/cart URL must carry a
-# utm_source that isn't a leftover placeholder, and a cart link must not
-# contain an obviously-unfilled item number.
+# utm_source that isn't a leftover placeholder, a utm_campaign of the form
+# aik_<that same platform>_pc-builder, and a cart link must not contain an
+# obviously-unfilled item number.
 PLACEHOLDER_TOKENS_RE = re.compile(
-    r"(itemnumber|item_number|\{item|undefined|null|tbd|xxxx+)", re.IGNORECASE
+    r"(itemnumber|item_number|\{item|\{platform\}|%7Bplatform%7D"
+    r"|undefined|null|tbd|xxxx+)",
+    re.IGNORECASE,
 )
 NEWEGG_LINK_RE = re.compile(r"https://www\.newegg\.com/p/\S+", re.IGNORECASE)
 CART_LINK_RE = re.compile(r"https://secure\.newegg\.com/api/shop/add\?\S+", re.IGNORECASE)
 UTM_SOURCE_RE = re.compile(r"utm_source=([a-z_]+)", re.IGNORECASE)
+UTM_CAMPAIGN_RE = re.compile(r"utm_campaign=([^&\s)\"']+)", re.IGNORECASE)
+UTM_CAMPAIGN_SLUG = "pc-builder"
 
 TABLE_ROW_RE = re.compile(r"^\s*\|(.+)\|\s*$")
 TABLE_SEP_CELL_RE = re.compile(r"^[\s\-:]+$")
@@ -335,10 +340,25 @@ def check_links_well_formed(text, lightweight):
     for link in product_links:
         if "utm_source=" not in link.lower():
             failures.append(f"Product link missing utm_source parameter: {link}")
-        else:
-            m = UTM_SOURCE_RE.search(link)
-            if m and m.group(1).lower() in ("", "none", "todo"):
-                failures.append(f"Product link has an empty/placeholder utm_source: {link}")
+            continue
+        m = UTM_SOURCE_RE.search(link)
+        if m and m.group(1).lower() in ("", "none", "todo"):
+            failures.append(f"Product link has an empty/placeholder utm_source: {link}")
+            continue
+        # utm_campaign must be aik_<the same platform>_pc-builder -- a mismatch
+        # means the platform was only half-substituted and the attribution row
+        # would disagree with itself.
+        source = m.group(1).lower() if m else ""
+        campaign_match = UTM_CAMPAIGN_RE.search(link)
+        if not campaign_match:
+            failures.append(f"Product link missing utm_campaign parameter: {link}")
+            continue
+        expected = f"aik_{source}_{UTM_CAMPAIGN_SLUG}"
+        if campaign_match.group(1).lower() != expected:
+            failures.append(
+                f"Product link utm_campaign should be '{expected}' to match "
+                f"utm_source={source}, got '{campaign_match.group(1)}': {link}"
+            )
     return failures
 
 
@@ -490,7 +510,7 @@ def build_rules():
         lambda ctx: check_format_matches_environment(
             ctx["text"], ctx["claude_env"], ctx["fmt"], ctx["markdown_fallback_reason"]))
 
-    add("H7", "Product/cart links carry no placeholder tokens and a real utm_source", "HARD", 3,
+    add("H7", "Product/cart links carry no placeholder tokens, a real utm_source and a matching utm_campaign", "HARD", 3,
         not_lightweight, lambda ctx: check_links_well_formed(ctx["text"], ctx["lightweight"]))
 
     add("H17", "Cart link item count matches non-owned component count in the table", "HARD", 6,

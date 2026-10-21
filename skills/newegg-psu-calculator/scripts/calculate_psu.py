@@ -23,8 +23,9 @@ Spec JSON fields (all optional except at least one component):
                   (default none)
     skip_product_search - bool, set true to skip the live PSU product lookup
                   (recommended_products stays empty; shop_url is still returned)
-    utm_source  - calling platform for Newegg link tagging, e.g. "claude" (default),
-                  "cursor", "unknown_agent" -- see build_item_url() below and
+    utm_source  - calling platform for Newegg link tagging, e.g. "claude",
+                  "cursor", or "other" when undetermined (default
+                  "other") -- see build_item_url() below and
                   newegg-pc-builder-v2's reference/product_link_rules.md for how
                   this is determined. Never hardcode a guess.
 
@@ -45,27 +46,34 @@ from difflib import SequenceMatcher
 # Same convention as newegg-pc-builder-v2's reference/product_link_rules.md.
 # utm_source is the calling platform, resolved by the agent per
 # environment_detection.md (Claude-exclusive tool present -> "claude", a
-# Cursor project signature -> "cursor", etc.; "unknown_agent" if undetermined)
+# Cursor project signature -> "cursor", etc.; "other" if undetermined)
 # and passed in via the JSON spec's "utm_source" key -- never hardcode a guess.
-UTM_CAMPAIGN = "psu-calculator"
+UTM_CAMPAIGN_SLUG = "psu-calculator"
 UTM_CONTENT = "newegg-psu-calculator"
+
+
+def build_campaign(utm_source):
+    """utm_campaign = aik_ + the platform used in utm_source + _<skill slug>."""
+    return f"aik_{utm_source}_{UTM_CAMPAIGN_SLUG}"
 
 
 def build_item_url(item_number, utm_source):
     """Tagged Newegg product-page link for a single item number."""
+    utm_source = utm_source or "other"
     return (
         f"https://www.newegg.com/p/{item_number}?Item={item_number}"
         f"&utm_source={utm_source}&utm_medium=ai_skill"
-        f"&utm_campaign={UTM_CAMPAIGN}&utm_content={UTM_CONTENT}"
+        f"&utm_campaign={build_campaign(utm_source)}&utm_content={UTM_CONTENT}"
     )
 
 
 def build_shop_url(recommended, utm_source):
     """Tagged Newegg category-search fallback link (no single Item=)."""
+    utm_source = utm_source or "other"
     return (
         f"https://www.newegg.com/p/pl?d={recommended}W+PSU+modular+gold"
         f"&utm_source={utm_source}&utm_medium=ai_skill"
-        f"&utm_campaign={UTM_CAMPAIGN}&utm_content={UTM_CONTENT}"
+        f"&utm_campaign={build_campaign(utm_source)}&utm_content={UTM_CONTENT}"
     )
 
 
@@ -239,7 +247,7 @@ def fetch_api(tool):
 PSU_SEARCH_MAX_PAGES = 3
 
 
-def fetch_psu_products(wattage_tier, utm_source="claude"):
+def fetch_psu_products(wattage_tier, utm_source="other"):
     """Look up 1-2 real 80+ Gold-or-better PSUs at the recommended wattage tier.
 
     Best-effort only: any failure (network, parsing, no Gold+ match after
@@ -392,11 +400,30 @@ def is_hedt_cpu(query):
 def fuzzy_match(query, candidates, key, min_similarity=None, allow_similarity_fallback=True):
     """Find best matching item in candidates list by key field.
 
+    Thin wrapper over fuzzy_match_detailed() for callers that only need the
+    item itself.
+    """
+    item, _stage, _score = fuzzy_match_detailed(
+        query, candidates, key, min_similarity, allow_similarity_fallback
+    )
+    return item
+
+
+def fuzzy_match_detailed(query, candidates, key, min_similarity=None,
+                         allow_similarity_fallback=True):
+    """fuzzy_match() plus how the hit was reached: (item, stage, score).
+
     Priority:
     1. Exact case-insensitive match on the key field
     2. Query is a suffix/prefix-boundary match (avoids "7950X" -> "7950X3D")
     3. All query words appear in the candidate, prefer shorter candidate names
     4. Highest character similarity (optional; GPU uses a floor and may skip)
+
+    Stages 1-3 all require the query's own words to be present, so they are
+    confident hits. Stage 4 is the only one that returns a nearest neighbour
+    the caller never named -- it reports stage 4 with its similarity score so
+    the caller can warn instead of passing the guess off as a real match.
+    A miss is (None, None, 0.0).
     """
     q = query.lower().strip()
     q_words = q.split()
@@ -404,7 +431,7 @@ def fuzzy_match(query, candidates, key, min_similarity=None, allow_similarity_fa
     # 1. Exact match
     for item in candidates:
         if item[key].lower() == q:
-            return item
+            return item, 1, 1.0
 
     # 2. Boundary-aware substring: each query word must appear as a whole word
     #    or at the end of the string (prevents "7950X" matching "7950X3D")
@@ -419,7 +446,8 @@ def fuzzy_match(query, candidates, key, min_similarity=None, allow_similarity_fa
     boundary_hits = [item for item in candidates if all_words_boundary(q_words, item[key])]
     if boundary_hits:
         # Among boundary hits, prefer the one with shortest name (most specific match)
-        return min(boundary_hits, key=lambda x: len(x[key]))
+        best = min(boundary_hits, key=lambda x: len(x[key]))
+        return best, 2, similarity(q, best[key].lower())
 
     # 3. All words appear anywhere (fallback)
     word_hits = [
@@ -427,16 +455,17 @@ def fuzzy_match(query, candidates, key, min_similarity=None, allow_similarity_fa
         if all(w in item[key].lower() for w in q_words)
     ]
     if word_hits:
-        return min(word_hits, key=lambda x: abs(len(x[key]) - len(q)))
+        best = min(word_hits, key=lambda x: abs(len(x[key]) - len(q)))
+        return best, 3, similarity(q, best[key].lower())
 
     # 4. Best similarity score (GPU: skip prose; require score strictly above floor)
     if not allow_similarity_fallback or not candidates:
-        return None
+        return None, None, 0.0
     best = max(candidates, key=lambda x: similarity(q, x[key].lower()))
     score = similarity(q, best[key].lower())
     if min_similarity is not None and score <= min_similarity:
-        return None
-    return best
+        return None, None, score
+    return best, 4, score
 
 
 def parse_watts(w_str):
@@ -476,7 +505,15 @@ def lookup_cpu(query, cpu_list):
 
 
 def lookup_gpu(query, gpu_list):
-    match = fuzzy_match(
+    """Returns (name, watts, approx_score).
+
+    approx_score is None for a confident hit (the query's own words are in the
+    matched name) and the similarity score when the match came from the
+    nearest-neighbour stage -- i.e. a card the user never actually named. The
+    caller turns that score into a warning rather than reporting the guess as
+    a plain match.
+    """
+    match, stage, score = fuzzy_match_detailed(
         query,
         gpu_list,
         "GPU",
@@ -484,8 +521,9 @@ def lookup_gpu(query, gpu_list):
         allow_similarity_fallback=allow_gpu_stage4_similarity(query),
     )
     if match:
-        return match["GPU"], parse_watts(match["Wattage"])
-    return None, 0.0
+        approx = score if stage == 4 else None
+        return match["GPU"], parse_watts(match["Wattage"]), approx
+    return None, 0.0, None
 
 
 def lookup_mb(mb_str):
@@ -589,8 +627,8 @@ def build_recommendation_note(total_watts, headroom_watts, recommended, floor_ap
 
 def _run(spec):
     # Calling platform for link tagging -- see build_item_url/build_shop_url above.
-    # Passed by the agent in the JSON spec; defaults to "claude" if omitted.
-    utm_source = spec.get("utm_source", "claude")
+    # Passed by the agent in the JSON spec; defaults to "other" if omitted.
+    utm_source = spec.get("utm_source") or "other"
     result = {
         "components": [],
         "total_watts": 0.0,
@@ -641,13 +679,24 @@ def _run(spec):
         if not gpu_list:
             result["warnings"].append("Could not fetch GPU data from API; GPU wattage not included.")
         else:
-            name, watts = lookup_gpu(gpu_raw, gpu_list)
+            name, watts, approx_score = lookup_gpu(gpu_raw, gpu_list)
             if name:
                 total += watts * gpu_count
-                result["components"].append({
+                component = {
                     "type": "GPU", "name": name, "watts": watts,
                     "count": gpu_count, "subtotal": watts * gpu_count
-                })
+                }
+                if approx_score is not None:
+                    component["approximate_match"] = True
+                    component["match_similarity"] = round(approx_score, 2)
+                    result["warnings"].append(
+                        f"GPU '{gpu_raw}' has no exact entry in Newegg's wattage "
+                        f"table; used the closest one, '{name}' ({watts:g}W, "
+                        f"similarity {approx_score:.2f}). Confirm this is the "
+                        f"intended card — a different model changes the "
+                        f"recommended PSU tier."
+                    )
+                result["components"].append(component)
             else:
                 result["warnings"].append(
                     f"GPU '{gpu_raw}' not found or low-confidence match ignored; "

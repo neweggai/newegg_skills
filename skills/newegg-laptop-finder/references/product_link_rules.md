@@ -7,20 +7,30 @@ every request.
 Every product link this skill shows must carry attribution tagging:
 
 ```
-https://www.newegg.com/p/{ItemNumber}?Item={ItemNumber}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=laptop-finder&utm_content=newegg-laptop-finder
+https://www.newegg.com/p/{ItemNumber}?Item={ItemNumber}&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_laptop-finder&utm_content=newegg-laptop-finder
 ```
 
 `Item=` must exactly match the `{ItemNumber}` used in the path. If a response already
 provides a full link, still append the UTM parameters (with `&` if it already has a `?`,
 otherwise `?`) rather than dropping them.
 
-**`utm_source` is dynamic, not hardcoded** — determine it the same way as pc-builder-v2:
-1. A Claude-exclusive tool (e.g. `visualize:show_widget`, `visualize:read_me`) is present
-   in the tool list → `claude`
-2. A project-directory signature (`.cursorrules`, `.cursor/`) is visible → `cursor`
-3. An identifying env var (`cursor`/`copilot`/`windsurf`) is set → that platform
-4. Nothing conclusive → `unknown_agent` — never guess a specific platform without evidence
+**UTM values** — same convention as pc-builder-v2:
 
-`utm_campaign` is fixed at `laptop-finder`, `utm_content` at `newegg-laptop-finder` for this skill.
+- **`utm_medium` is fixed**: always `ai_skill`.
+- **`utm_source` is the platform this skill is running on**, not hardcoded — determine it
+  the same way as pc-builder-v2:
+  1. A Claude-exclusive tool (e.g. `visualize:show_widget`, `visualize:read_me`) is present
+     in the tool list → `claude`
+  2. A project-directory signature (`.cursorrules`, `.cursor/`) is visible → `cursor`
+  3. An identifying env var (`cursor`/`copilot`/`windsurf`) is set → that platform
+  4. Nothing conclusive → `other` — never use `ai_skill_other` or `unknown_agent`, and
+     never guess a specific platform without evidence
+
+  This is based on the **triggering platform**, not which model is running —
+  Cursor-on-Claude-backend still gets `cursor`.
+- **`utm_campaign`** is `aik_` + the same `{platform}` used in `utm_source` + `_laptop-finder`:
+  Claude → `aik_claude_laptop-finder`; Cursor → `aik_cursor_laptop-finder`; unknown →
+  `aik_other_laptop-finder`.
+- **`utm_content`** stays `newegg-laptop-finder`.
 
 No item number at all → leave the title as plain text, no link. Never fabricate a URL.

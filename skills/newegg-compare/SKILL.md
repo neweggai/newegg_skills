@@ -90,7 +90,7 @@ This link must carry UTM tagging before display, see [`references/product_link_r
 
 **Example** (3 products):
 ```
-https://www.newegg.com/Product/Productcompare?compareall=true&CompareItemList=14-126-761%2C14-137-914%2C14-137-933&utm_source={platform}&utm_medium=ai_skill&utm_campaign=compare&utm_content=newegg-compare
+https://www.newegg.com/Product/Productcompare?compareall=true&CompareItemList=14-126-761%2C14-137-914%2C14-137-933&utm_source={platform}&utm_medium=ai_skill&utm_campaign=aik_{platform}_compare&utm_content=newegg-compare
 ```
 
 Maximum 5 item numbers. Strip any whitespace from item numbers before joining.
