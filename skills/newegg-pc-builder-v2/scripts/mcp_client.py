@@ -23,6 +23,13 @@ import urllib.request
 import urllib.error
 import uuid
 
+# The service returns Markdown containing emoji (✅, ⚠️) and CJK. On a GBK/cp936
+# console (Windows zh-CN) printing those raises UnicodeEncodeError and kills the
+# call after the request already succeeded.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 MCP_ENDPOINT = "https://apis.newegg.com/ex-mcp/endpoint/pc-build-upgrade"
 TIMEOUT = 60  # bumped from 30s: conversation_id follow-up calls have been observed to take longer
 
@@ -171,8 +178,16 @@ def cmd_call_tool(tool_name: str, arguments: dict):
                     print("RESULT (text):")
                     print(text)
     else:
+        # `_meta` is dropped deliberately: the gateway fills it with internal
+        # infrastructure detail (x-gateway-server, x-forwarded-for, x-origin-host,
+        # the upstream apis.newegg.org URL) plus the caller's own public IP
+        # (true-client-ip). None of that belongs in the conversation, and from
+        # there in whatever model provider is running this skill.
         print("RESULT:")
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        print(json.dumps(
+            {k: v for k, v in result.items() if k != "_meta"},
+            indent=2, ensure_ascii=False,
+        ))
 
     print()
     print("---")

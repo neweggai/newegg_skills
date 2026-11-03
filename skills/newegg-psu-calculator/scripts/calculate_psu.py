@@ -42,6 +42,13 @@ import sys
 import urllib.request
 from difflib import SequenceMatcher
 
+# Product names and warnings can carry CJK or emoji; on a GBK/cp936 console
+# (Windows zh-CN) printing those raises UnicodeEncodeError after the work is
+# already done.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # --- Newegg link tagging (UTM) --------------------------------------------
 # Same convention as newegg-pc-builder-v2's reference/product_link_rules.md.
 # utm_source is the calling platform, resolved by the agent per
@@ -79,6 +86,9 @@ def build_shop_url(recommended, utm_source):
 
 # Stage-4 GPU guess must beat this; equality is rejected (T400 vs "我没有 4090" == 0.50).
 GPU_FUZZY_MIN_SIMILARITY = 0.5
+# Same floor for CPUs: below it, report the CPU as unresolved rather than
+# attaching some unrelated entry's TDP to the build.
+CPU_FUZZY_MIN_SIMILARITY = 0.5
 # Below this similarity, a fixed-table lookup (motherboard) is treated as "not
 # recognized" rather than silently taking the nearest (possibly nonsensical) match.
 MB_FUZZY_MIN_SIMILARITY = 0.55
@@ -143,7 +153,16 @@ OPTICAL_WATTS = {
 
 PSU_TIERS = [550, 650, 750, 850, 1000, 1200, 1600]
 
-# Wattage tables come from the www-tool MCP endpoint (stateless JSON-RPC, no auth).
+# Wattage tables.
+#
+# Primary source is Newegg's public wattage API — the same one
+# newegg-pc-builder-v2 uses. The www-tool MCP endpoint below was introduced in
+# commit 6cac8f7 ("Standardize skill API access") as a replacement, but that
+# endpoint was never published: it answers 404 endpoint_not_found, which silently
+# dropped CPU and GPU from every total and produced PSU tiers roughly half the
+# real requirement. It is kept only as a fallback for the day it does go live.
+CPU_WATTAGE_URL = "https://www.newegg.com/api/common/CPUWattage?countryCode=USA"
+GPU_WATTAGE_URL = "https://www.newegg.com/api/common/GPUWattage?countryCode=USA"
 MCP_ENDPOINT = "https://apis.newegg.com/ex-mcp/endpoint/website-www-tool"
 CPU_WATTAGE_TOOL = "getapi_assistance_getJson_WWW_CPUWattage_USA"
 GPU_WATTAGE_TOOL = "getapi_assistance_getJson_WWW_GPUWattage_USA"
@@ -204,6 +223,45 @@ def _call_mcp_tool(endpoint, tool_name, arguments, timeout=15):
         return None
 
 
+def _unwrap_wattage_payload(value):
+    """Peel the multiply-encoded wattage payload down to its list of dicts.
+
+    Both transports wrap the table the same way: a JSON string that decodes to
+    another JSON string, then to {"Data": "<json list>"}.
+    """
+    for _ in range(5):
+        if isinstance(value, str):
+            value = json.loads(value)
+        elif isinstance(value, dict) and "Data" in value:
+            value = value["Data"]
+        else:
+            break
+    return value if isinstance(value, list) else []
+
+
+def fetch_wattage_url(url):
+    """Fetch a wattage table from Newegg's public API. Returns list of dicts."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            raw = resp.read().decode("utf-8")
+        return _unwrap_wattage_payload(raw)
+    except Exception:
+        return []
+
+
+def fetch_wattage(url, tool):
+    """Get a wattage table, public API first, www-tool MCP endpoint as fallback.
+
+    Returns [] only when both transports fail — the caller treats that as fatal
+    rather than quietly dropping the component from the total.
+    """
+    table = fetch_wattage_url(url)
+    if table:
+        return table
+    return fetch_api(tool)
+
+
 def fetch_api(tool):
     """Fetch a wattage table through the www-tool MCP endpoint. Returns list of dicts.
 
@@ -225,17 +283,7 @@ def fetch_api(tool):
         if not content:
             return []
 
-        # The payload is multiply encoded: content[0].text is a JSON string that
-        # decodes to another JSON string, then to {"Data": "<json list>"}.
-        value = content[0]["text"]
-        for _ in range(5):
-            if isinstance(value, str):
-                value = json.loads(value)
-            elif isinstance(value, dict) and "Data" in value:
-                value = value["Data"]
-            else:
-                break
-        return value if isinstance(value, list) else []
+        return _unwrap_wattage_payload(content[0]["text"])
     except Exception:
         return []
 
@@ -498,10 +546,23 @@ def safe_int(value, default=1):
 # ──────────────────────────────────────────────
 
 def lookup_cpu(query, cpu_list):
-    match = fuzzy_match(query, cpu_list, "Series")
+    """Returns (name, watts, approx_score), mirroring lookup_gpu().
+
+    approx_score is None for a confident hit and the similarity score when the
+    match came from the last-resort nearest-neighbour stage. Without a floor
+    here, "Totally Fake CPU 9000" matched "Core 2 Quad Q9300" and reported its
+    95W as fact — the same class of bug the GPU path was already fixed for.
+    """
+    match, stage, score = fuzzy_match_detailed(
+        query,
+        cpu_list,
+        "Series",
+        min_similarity=CPU_FUZZY_MIN_SIMILARITY,
+    )
     if match:
-        return match["Series"], parse_watts(match["Wattage"])
-    return None, 0.0
+        approx = score if stage == 4 else None
+        return match["Series"], parse_watts(match["Wattage"]), approx
+    return None, 0.0, None
 
 
 def lookup_gpu(query, gpu_list):
@@ -643,19 +704,40 @@ def _run(spec):
     }
     total = 0.0
     hedt = is_hedt_cpu(spec.get("cpu"))
+    # Components the caller explicitly asked for whose wattage could not be
+    # resolved. CPU and GPU dominate the total, so leaving either out does not
+    # produce a slightly-low number — it produces a PSU tier that can be half
+    # what the build draws. Any entry here aborts the recommendation instead.
+    unresolved = []
 
     # ── CPU ──
     if spec.get("cpu"):
-        cpu_list = fetch_api(CPU_WATTAGE_TOOL)
+        cpu_list = fetch_wattage(CPU_WATTAGE_URL, CPU_WATTAGE_TOOL)
         if not cpu_list:
-            result["warnings"].append("Could not fetch CPU data from API; CPU wattage not included.")
+            unresolved.append(
+                "Could not fetch the CPU wattage table from Newegg "
+                "(both the public API and the www-tool MCP endpoint failed)."
+            )
         else:
-            name, watts = lookup_cpu(spec["cpu"], cpu_list)
+            name, watts, approx_score = lookup_cpu(spec["cpu"], cpu_list)
             if name:
                 total += watts
-                result["components"].append({"type": "CPU", "name": name, "watts": watts})
+                component = {"type": "CPU", "name": name, "watts": watts}
+                if approx_score is not None:
+                    component["approximate_match"] = True
+                    component["match_similarity"] = round(approx_score, 2)
+                    result["warnings"].append(
+                        f"CPU '{spec['cpu']}' has no exact entry in Newegg's "
+                        f"wattage table; used the closest one, '{name}' "
+                        f"({watts:g}W, similarity {approx_score:.2f}). Confirm "
+                        f"this is the intended chip — a different model changes "
+                        f"the recommended PSU tier."
+                    )
+                result["components"].append(component)
             else:
-                result["warnings"].append(f"CPU '{spec['cpu']}' not found in API data.")
+                unresolved.append(
+                    f"CPU '{spec['cpu']}' was not found in Newegg's wattage table."
+                )
 
     # ── GPU ──
     # Auxiliary: known iGPU / no-dGPU phrases => 0W (do not fuzzy-match).
@@ -675,9 +757,12 @@ def _run(spec):
             "subtotal": 0.0,
         })
     elif gpu_raw is not None and str(gpu_raw).strip():
-        gpu_list = fetch_api(GPU_WATTAGE_TOOL)
+        gpu_list = fetch_wattage(GPU_WATTAGE_URL, GPU_WATTAGE_TOOL)
         if not gpu_list:
-            result["warnings"].append("Could not fetch GPU data from API; GPU wattage not included.")
+            unresolved.append(
+                "Could not fetch the GPU wattage table from Newegg "
+                "(both the public API and the www-tool MCP endpoint failed)."
+            )
         else:
             name, watts, approx_score = lookup_gpu(gpu_raw, gpu_list)
             if name:
@@ -698,9 +783,9 @@ def _run(spec):
                     )
                 result["components"].append(component)
             else:
-                result["warnings"].append(
-                    f"GPU '{gpu_raw}' not found or low-confidence match ignored; "
-                    f"GPU wattage not included."
+                unresolved.append(
+                    f"GPU '{gpu_raw}' was not found in Newegg's wattage table, or "
+                    f"the only match was too low-confidence to trust."
                 )
 
     # ── Motherboard ──
@@ -799,6 +884,19 @@ def _run(spec):
         result["components"].append({
             "type": "Optical", "name": spec["optical"], "watts": opt_watts
         })
+
+    if unresolved:
+        return {
+            "error": (
+                "Cannot recommend a PSU wattage: the draw of one or more "
+                "components could not be determined. Any number produced "
+                "without them would be too low to be safe."
+            ),
+            "unresolved": unresolved,
+            "resolved_components": result["components"],
+            "partial_watts_do_not_use": round(total, 1),
+            "warnings": result["warnings"],
+        }
 
     total = round(total, 1)
     recommended, headroom = recommend_psu(total)

@@ -25,11 +25,14 @@ mapping an unrecognized string like "魔改ITX定制版" to the nearest-sounding
 ("Mini-ITX" just because it contains "ITX") is exactly the bug the script was fixed to avoid, and
 doing it by hand reproduces the same wrong result with none of the script's warnings.
 
-`scripts/calculate_psu.py` fetches the CPU and GPU wattage tables from the
-`website-www-tool` endpoint (`apis.newegg.com/ex-mcp/...`, stateless JSON-RPC, no auth)
-and sends `x-skill: newegg-psu-calculator` on every request. Nothing to install or
-register; if a fetch fails the script degrades to a warning in `warnings[]` rather than
-guessing a wattage.
+`scripts/calculate_psu.py` fetches the CPU and GPU wattage tables from Newegg's public
+wattage API (`www.newegg.com/api/common/CPUWattage` / `GPUWattage`), falling back to the
+`website-www-tool` ex-mcp endpoint if that is ever unavailable. Nothing to install or register.
+
+If neither source yields a wattage for a CPU or GPU the user actually named, the script returns
+`{"error": ..., "unresolved": [...]}` and **no** `recommended_psu_watts` — see "When the script
+returns an error" below. It never guesses a wattage, and it no longer emits a tier computed
+without the two components that dominate the total.
 
 **Core principle**: Be smart about what to ask. If the user already mentioned
 components, skip those questions. Combine remaining unknowns into as few
@@ -271,6 +274,19 @@ Script JSON fields (use these; do not invent numbers):
 | `shop_url` | Newegg "product list" (category-search) link at the same wattage — the same URL that was previously shown alone as the fallback. **Always show this too**, not only when `recommended_products` is empty — see the table format below. |
 | `recommended_products` | 0–5 real 80+ Gold-or-better PSUs at the recommended tier, each with `name`, `price`, `currency`, `link` (`newegg.com/p/<item#>`, UTM-tagged). Render as a numbered Markdown table — see "Recommended-products table format" below — never as inline bullets. |
 | `warnings[]` | Any component the script couldn't confidently identify (unrecognized motherboard/RAM/SSD/HDD/optical string, a non-numeric count, a GPU matched only approximately, etc.) — see below. |
+
+### When the script returns an error
+
+If the output has a top-level `error` key instead of a wattage, the CPU or GPU could not be
+resolved. Tell the user plainly what `unresolved[]` says and ask them to confirm the exact model.
+**Do not** present `partial_watts_do_not_use` or derive a tier from it, and do not fall back to
+your own estimate — a total missing the CPU or GPU lands roughly half the real draw, and a PSU
+bought on that number will not run the build. This field exists only so you can show which parts
+*were* identified while asking about the rest.
+
+(Historically this was a `warnings[]` entry while a tier was still printed. That produced a 550W
+recommendation for a 9800X3D + RTX 5080 build whose real draw is ~580W, because the wattage
+endpoint had been silently 404ing — hence the hard stop.)
 
 **Always surface `warnings[]` to the user when non-empty**, even briefly. A component the script
 couldn't identify still affects the total (RAM: excluded entirely; SSD/HDD/optical: assumed a

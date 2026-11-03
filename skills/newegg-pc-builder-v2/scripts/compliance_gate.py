@@ -120,6 +120,14 @@ import re
 import json
 import argparse
 
+# Product names and warnings can carry CJK or emoji; on a GBK/cp936 console
+# (Windows zh-CN) printing those raises UnicodeEncodeError after the work is
+# already done.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+
 
 # =============================================================================
 # Mechanical (text-based) check helpers — extended from validate_output.py

@@ -66,6 +66,13 @@ import json
 import argparse
 import re
 
+# Product names and warnings can carry CJK or emoji; on a GBK/cp936 console
+# (Windows zh-CN) printing those raises UnicodeEncodeError after the work is
+# already done.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 
 def build_item_url(item_number, utm_source):
     """Mirror reference/product_link_rules.md exactly."""

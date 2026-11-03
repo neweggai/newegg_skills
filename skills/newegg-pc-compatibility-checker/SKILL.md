@@ -7,7 +7,7 @@ allowed-tools: bash
 # PC Compatibility Checker
 
 Verify hardware compatibility via Newegg's MCP endpoints over HTTP using standard JSON-RPC. Use the
-`bash` tool to call the endpoints — no MCP client registration required.
+`bash` tool to run `scripts/pcb_client.py` — no MCP client registration required.
 
 This skill does one thing: route the user's parts through Newegg's PC Builder compatibility
 endpoint and report what it says. It does not recommend new builds from scratch — that is outside
@@ -24,13 +24,16 @@ scope.
   this skill exists to prevent.
 * **Do not** ask for clarification when the user already gave you the parts. Infer item numbers /
   names from their message and call immediately.
-* Use the **`bash`** tool to run the curl commands below.
-* On curl failure or invalid JSON, report the error directly. Do not fall back to your own
-  knowledge to produce a verdict.
+* Use the **`bash`** tool to run `scripts/pcb_client.py` as shown below. Never call the ex-mcp
+  endpoints with a raw `curl` — see Step 2 for why.
+* The script reports every failure as `{"error": ...}` JSON. On an error, report it directly. Do
+  not fall back to your own knowledge to produce a verdict.
 
 ## Endpoints
 
-**Required header on every request**: all calls to `apis.newegg.com/ex-mcp/...` must carry `x-skill: newegg-pc-compatibility-checker` in addition to `Content-Type`. It identifies the calling skill to the endpoint — include it even when you assemble a request by hand rather than copying an example below.
+`scripts/pcb_client.py` owns the transport for both endpoints below — it sets the required
+`x-skill: newegg-pc-compatibility-checker` header, unwraps the JSON-RPC envelope, and strips the
+gateway's `_meta` block. Do not assemble these requests by hand.
 
 | Purpose | Endpoint |
 | --- | --- |
@@ -83,17 +86,18 @@ Look at what the user provided:
   identical to a genuine compatible verdict. Do not skip this just because it looks like a
   legitimate ID.
 
-  **How to verify:** call **product-search** with the item number itself as the `query`. This
-  endpoint is a general keyword search, not an exact-ID lookup, so it returns loosely-matching
-  results even for numbers that don't exist — the check is whether any returned product's
-  `ItemNumber` field is an **exact match** for the number you searched, not whether the search
-  returned results at all.
-  * Exact match found → confirmed real, proceed. You now also have the product name and can use
-    it for the Newegg link / display name.
-  * No exact match → treat it exactly like a `product-search: total 0` case (see below): tell the
-    user this item number wasn't found in the catalog and confirm before proceeding with anything.
-* **They gave model names** (e.g. "Ryzen 9 9950X3D" + "ASUS B760M-AYW WIFI D4") → call
-  **product-search** once per part (in parallel) to resolve each name into an `ItemNumber`.
+  **How to verify:** you don't do this by hand — `scripts/pcb_client.py check` (Step 2) verifies
+  every item number against pc-builder's own catalog lookup before it submits the combo, and
+  refuses to submit if any are unknown. Run `python scripts/pcb_client.py verify <ITEM...>` if you
+  want the verification on its own; it also returns each confirmed item's name and price.
+
+  Do not try to verify with product-search. That endpoint is a keyword search, not an exact-ID
+  lookup, and real item numbers routinely fail to appear in its results (19-113-787 is a live
+  product that a search for its own number does not return) — using it as the gate rejects valid
+  builds.
+* **They gave model names** (e.g. "Ryzen 9 9950X3D" + "ASUS B760M-AYW WIFI D4") → run
+  `python scripts/pcb_client.py search "<model name>"` once per part to resolve each name into an
+  `ItemNumber`.
 * **Mixed** → only search for the parts that do not already have item numbers.
 
 product-search returns `ItemNumber` directly in the short-hyphenated format — that is everything
@@ -120,41 +124,36 @@ about.
 
 ### Step 2 — Call pc-builder once with every item
 
-Call `comboCompatibleAll` with a **space-separated list** of short-hyphenated item numbers in a
-single `itemNumber` string. Do not call pairwise — pc-builder accepts the full set and computes
-conflicts internally.
+Run the bundled client. It takes the short-hyphenated item numbers as arguments, verifies each one
+against the catalog, then submits the whole set in a single compatibility call:
 
 ```
-curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder" \
-  -H "Content-Type: application/json" \
-  -H "x-skill: newegg-pc-compatibility-checker" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/call",
-    "params": {
-      "name": "comboCompatibleAll",
-      "arguments": {
-        "businessId": 2,
-        "itemNumber": "<ITEM1> <ITEM2> <ITEM3>"
-      }
-    }
-  }'
+python scripts/pcb_client.py check <ITEM1> <ITEM2> <ITEM3>
 ```
 
-* `businessId` is always **`2`** (fixed).
-* `itemNumber` is a **space-separated** string of short-hyphenated item numbers — e.g.
-  `"19-113-938 13-144-674"`.
+Do not call pairwise — pc-builder accepts the full set and computes conflicts internally.
 
-> If the call returns a tool-not-found error, first run `tools/list` to discover the correct tool
-> name:
->
-> ```
-> curl -sS -X POST "https://apis.newegg.com/ex-mcp/endpoint/ext-pc-builder" \
->   -H "Content-Type: application/json" \
->   -H "x-skill: newegg-pc-compatibility-checker" \
->   -d '{"jsonrpc":"2.0","id":0,"method":"tools/list"}'
-> ```
+**Always go through `pcb_client.py`. Never call `apis.newegg.com/ex-mcp/...` with a raw `curl`.**
+The gateway attaches a `_meta.httpRequest` block to every response that echoes internal
+infrastructure detail (`x-gateway-server`, `x-forwarded-for`, `x-origin-host`, the upstream
+`apis.newegg.org` URL) alongside the caller's own public IP (`true-client-ip`). A raw curl puts all
+of that into the conversation, and from there into whatever model provider is running this skill.
+`pcb_client.py` reads only the verdict payload and never touches `_meta`.
+
+The script's other commands:
+
+```
+python scripts/pcb_client.py verify <ITEM1> <ITEM2>    # existence + name/price only
+python scripts/pcb_client.py search "<keyword>"        # name -> ItemNumber (Step 1)
+```
+
+`businessId` is fixed at `2` and the `x-skill` header is set by the script; you do not pass either.
+
+**If `check` returns an `error` with `not_found`**, stop — do not report a verdict. The listed item
+numbers are not in Newegg's catalog, and the script deliberately refuses to submit the combo
+because `comboCompatibleAll` does not validate item numbers: an unknown item is treated as "no
+data" and the whole combo comes back `isCompatible: true`, visually identical to a genuine pass.
+Tell the user which numbers were not found and resolve them before retrying.
 
 #### pc-builder response shape
 
@@ -359,7 +358,7 @@ newegg-psu-calculator-backed verdict with both wattages, or the official calcula
 
 ## Edge cases
 
-* **HTTP error or curl failure**: Report status code and body. Do not retry silently and do not
+* **HTTP error or script failure**: Report the `error` string the script printed. Do not retry silently and do not
   fall back to your own compatibility knowledge.
 * **`result.error` in response**: Display `error.message` to the user.
 * **`incompatibleItems` empty but `isCompatible: false`**: Treat as an upstream bug — tell the
